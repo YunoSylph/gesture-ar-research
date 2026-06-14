@@ -129,10 +129,31 @@ type StreamMessage = {
     required_frames?: number;
     click_armed?: boolean;
   } | null;
+  validation_context?: {
+    proposal_label?: GestureId | "";
+    proposal_state?: string;
+    proposal_confidence?: number;
+    active?: boolean;
+    background?: boolean;
+    ready?: boolean;
+    accepted?: boolean;
+    rejected?: boolean;
+    rejection_reason?: string;
+    lock_progress?: number;
+    cooldown_remaining?: number;
+    candidate_label?: GestureId | "";
+    expected_label?: GestureId | "";
+    final_action?: ActionId | "idle";
+    risk_cost?: number;
+    last_accepted_action?: ActionId | "idle";
+    stable_frames?: number;
+    required_frames?: number;
+  } | null;
 };
 
 type PolicyContext = NonNullable<StreamMessage["policy_context"]>;
 type ControlContext = NonNullable<StreamMessage["control_context"]>;
+type ValidationContext = NonNullable<StreamMessage["validation_context"]>;
 
 type CameraStats = {
   running?: boolean;
@@ -346,48 +367,48 @@ const gestureGuideCards: Array<{
     id: "point_2f",
     label: "Point",
     action: "Move cursor",
-    pose: "Hold index and middle fingers visible.",
-    cue: "Keep the hand steady before selecting.",
+    pose: "Keep a stable visible hand so the cursor can settle.",
+    cue: "Small hand motion moves the cursor; it is a state, not a command.",
     icon: MousePointer2
   },
   {
     id: "click_2f",
     label: "Click",
     action: "Confirm",
-    pose: "Briefly pinch index to thumb, then open again.",
-    cue: "Open hand first; one short pinch is one click.",
+    pose: "Open/armed hand, short pinch or tap, then release open.",
+    cue: "Wait for lock, then open again before the next click.",
     icon: Crosshair
   },
   {
     id: "swipe_left",
     label: "Swipe Left",
     action: "Previous",
-    pose: "Move the whole visible hand horizontally left.",
-    cue: "Make one clean side motion until the lock bar fills.",
+    pose: "Move the whole visible hand widely to the left.",
+    cue: "Use one horizontal motion, not a finger pose.",
     icon: ChevronLeft
   },
   {
     id: "swipe_right",
     label: "Swipe Right",
     action: "Next",
-    pose: "Move the whole visible hand horizontally right.",
-    cue: "Make one clean side motion until the lock bar fills.",
+    pose: "Move the whole visible hand widely to the right.",
+    cue: "Use one horizontal motion, not a finger pose.",
     icon: ChevronRight
   },
   {
     id: "zoom_in",
     label: "Zoom In",
     action: "Scale up",
-    pose: "Move the hand closer so it grows in frame.",
-    cue: "Avoid side movement while changing distance.",
+    pose: "Change hand scale clearly so it grows in frame.",
+    cue: "Move closer without side motion; random motion is rejected.",
     icon: ZoomIn
   },
   {
     id: "zoom_out",
     label: "Zoom Out",
     action: "Scale down",
-    pose: "Move the hand back so it shrinks in frame.",
-    cue: "Avoid side movement while changing distance.",
+    pose: "Change hand scale clearly so it shrinks in frame.",
+    cue: "Move back without side motion; random motion is rejected.",
     icon: ZoomOut
   }
 ];
@@ -1154,7 +1175,8 @@ function TaskProgressOverlay({
   live,
   detectionRate,
   policyContext,
-  controlContext
+  controlContext,
+  validationContext
 }: {
   task: TaskDefinition;
   taskRun: TaskRunState;
@@ -1162,6 +1184,7 @@ function TaskProgressOverlay({
   detectionRate: string;
   policyContext: PolicyContext | null;
   controlContext: ControlContext | null;
+  validationContext: ValidationContext | null;
 }) {
   const complete = taskRun.completed >= task.steps.length;
   const detectionValue = Number(detectionRate);
@@ -1172,10 +1195,15 @@ function TaskProgressOverlay({
   const expectedLabel = (policyContext?.expected_label || task.steps[taskRun.completed]?.gesture || "no_gesture") as GestureId;
   const expectedTitle = expectedAction === "idle" ? "Idle" : actionLabels[expectedAction];
   const currentGuide = gestureGuideCards.find((item) => item.id === expectedLabel);
-  const controlProgress = Math.round(Math.max(0, Math.min(1, controlContext?.progress ?? 0)) * 100);
-  const controlMode = controlContext?.mode ?? (live ? "tracking" : "standby");
-  const candidateLabel = (controlContext?.candidate_label || expectedLabel) as GestureId;
+  const validationProgress = validationContext?.lock_progress ?? controlContext?.progress ?? 0;
+  const controlProgress = Math.round(Math.max(0, Math.min(1, validationProgress)) * 100);
+  const controlMode = validationContext?.proposal_state ?? controlContext?.mode ?? (live ? "tracking" : "standby");
+  const candidateLabel = (validationContext?.candidate_label || validationContext?.proposal_label || controlContext?.candidate_label || expectedLabel) as GestureId;
   const candidateName = gestureDisplayName(candidateLabel);
+  const rejectionReason = validationContext?.rejection_reason || "";
+  const cooldown = Math.max(0, Math.round(validationContext?.cooldown_remaining ?? 0));
+  const lastAccepted = validationContext?.last_accepted_action || taskRun.lastAcceptedAction || "idle";
+  const ready = Boolean(validationContext?.ready);
 
   return (
     <div className="task-progress-overlay">
@@ -1197,7 +1225,15 @@ function TaskProgressOverlay({
       {live ? (
         <div className={`gesture-lock-panel ${controlMode}`}>
           <div>
-            <span>{controlMode === "locked" ? "Gesture locked" : controlMode === "preparing" ? "Hold gesture" : "Gesture gate"}</span>
+            <span>
+              {controlMode === "locked"
+                ? "Gesture locked"
+                : controlMode === "ready"
+                  ? "Ready for TARC"
+                  : controlMode === "preparing" || controlMode === "candidate"
+                    ? "Hold gesture"
+                    : "Gesture gate"}
+            </span>
             <strong>{candidateName}</strong>
           </div>
           <div className="gesture-lock-track" aria-label="Gesture lock progress">
@@ -1205,13 +1241,22 @@ function TaskProgressOverlay({
           </div>
           <em>
             {controlMode === "locked"
-              ? "Command is being held for the task controller."
+              ? "Ready proposal is being held for the task controller."
+              : ready
+                ? "TARC can accept this proposal."
               : controlMode === "cooldown"
-                ? "Pause briefly before the next command."
+                ? `Pause ${cooldown} ms before the next command.`
+                : rejectionReason
+                  ? `Rejected: ${rejectionReason.replaceAll("_", " ")}.`
                 : controlContext?.click_armed
                   ? "Click is armed: close briefly, then open."
-                  : "Make the shown gesture until the bar fills."}
+                  : "Make the shown gesture until the validation bar fills."}
           </em>
+          <div className="validation-mini-grid">
+            <span>Expected <strong>{gestureDisplayName(expectedLabel)}</strong></span>
+            <span>State <strong>{controlMode}</strong></span>
+            <span>Last <strong>{lastAccepted === "idle" ? "Idle" : actionLabels[lastAccepted]}</strong></span>
+          </div>
         </div>
       ) : null}
       {policyContext ? (
@@ -1285,6 +1330,7 @@ function App() {
   const [pointerScreen, setPointerScreen] = useState<{ x: number; y: number } | null>(null);
   const [policyContext, setPolicyContext] = useState<PolicyContext | null>(null);
   const [controlContext, setControlContext] = useState<ControlContext | null>(null);
+  const [validationContext, setValidationContext] = useState<ValidationContext | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [sceneState, setSceneState] = useState<SceneState>(initialSceneState);
   const [taskRun, setTaskRun] = useState<TaskRunState>(initialTaskRunState);
@@ -1354,6 +1400,8 @@ function App() {
     setPointerScreen(null);
     setPolicyContext(null);
     setControlContext(null);
+    setValidationContext(null);
+    setValidationContext(null);
   }, [source, cameraIndex]);
 
   useEffect(() => {
@@ -1379,6 +1427,7 @@ function App() {
       setPointerScreen(null);
       setPolicyContext(null);
       setControlContext(null);
+      setValidationContext(null);
       return;
     }
 
@@ -1424,6 +1473,7 @@ function App() {
       setLandmarks(payload.landmarks ?? []);
       setCameraStats(payload.camera ?? null);
       setControlContext(payload.control_context ?? null);
+      setValidationContext(payload.validation_context ?? null);
       setPointerScreen((current) => {
         if (!payload.pointer || source !== "webcam") return null;
         if (!current) return payload.pointer;
@@ -1762,6 +1812,7 @@ function App() {
             detectionRate={detectionRate}
             policyContext={policyContext}
             controlContext={controlContext}
+            validationContext={validationContext}
           />
           <div className="telemetry">
             <div>

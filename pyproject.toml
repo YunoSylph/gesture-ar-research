@@ -37,6 +37,14 @@ dev = [
   "pytest>=8.0",
 ]
 
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["research_pipeline*"]
+exclude = ["configs*", "data*", "demo*", "ios_demo*", "models*", "reports*", "tests*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

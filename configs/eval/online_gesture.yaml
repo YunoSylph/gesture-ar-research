@@ -1,0 +1,84 @@
+mode: pseudo_continuous
+manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
+risk_costs_path: configs/interaction/action_risk_costs.yaml
+
+predictor:
+  kind: c6_ensemble
+  fallback: rule_based
+  c6:
+    model_paths:
+      - artifacts/models/ipn_c1t_tcn_full_validated.pkl
+      - artifacts/models/ipn_c1t_tcn_augmented.pkl
+    hybrid:
+      neural_weight: 0.96
+      geometry_weight: 0.08
+      enable_safety_gate: true
+      action_threshold: 0.44
+      no_gesture_margin: 0.03
+      low_quality_confidence: 0.42
+      low_quality_no_gesture_boost: 0.12
+      weak_motion_no_gesture_boost: 0.06
+      swipe_motion_min: 0.055
+      zoom_delta_min: 0.035
+      click_distance_max: 0.075
+    calibration:
+      c3_weight: 0.15
+      temperature: 1.25
+      min_action_confidence: 0.0
+      min_action_margin: 0.0
+      label_biases:
+        click_2f: 0.18
+        no_gesture: 0.12
+        swipe_left: 0.0
+        zoom_in: 0.0
+        zoom_out: 0.22
+
+pseudo_continuous:
+  max_sequences: 4
+  max_clips_per_sequence: 12
+  frame_step_ms: 33
+  window_size: 32
+  idle_gap_ms: 600
+  insert_idle_between_clips: true
+  synthetic_fallback: true
+  max_frames_per_clip: 48
+
+task_replay:
+  enabled: true
+  trials_per_task: 1
+  tasks:
+    - object_control
+    - scroll_open
+    - sort_virtual_item
+
+smoothing:
+  window: 5
+
+proposal_controller:
+  default_threshold: 0.55
+  label_thresholds:
+    point_2f: 0.46
+    click_2f: 0.58
+    swipe_left: 0.56
+    swipe_right: 0.56
+    zoom_in: 0.56
+    zoom_out: 0.56
+  default_stable_frames: 2
+  label_stable_frames:
+    point_2f: 1
+    click_2f: 2
+    swipe_left: 2
+    swipe_right: 2
+    zoom_in: 2
+    zoom_out: 2
+  cooldown_ms: 250
+  expected_label_mode: none
+  expected_threshold_delta: -0.05
+  unexpected_threshold_delta: 0.08
+
+metrics:
+  min_segment_iou: 0.1
+  latency_grace_ms: 1000
+
+task:
+  id: pseudo_public_replay

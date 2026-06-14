@@ -23,6 +23,7 @@ from research_pipeline.data.tensors import LandmarkTensor, load_landmark_npz
 from research_pipeline.features.preprocessing import clip_feature_summary, palm_scale, preprocess_dual_view
 from research_pipeline.interaction.action_safe import ActionSafePolicy, ActionSafePolicyConfig
 from research_pipeline.interaction.fsm import ACTION_BY_LABEL, ContextAwarePolicy, ContextPolicyConfig
+from research_pipeline.interaction.gesture_validation import GestureValidationLayer
 from research_pipeline.interaction.task_aware import TaskAwareActionSafePolicy, TaskAwarePolicyConfig, load_task_scenarios
 from research_pipeline.labels import TARGET_LABELS
 from research_pipeline.models.calibrated import CalibratedFusionConfig, calibrated_fusion_prediction
@@ -332,6 +333,7 @@ def prediction_payload(
     task: str = "",
     policy_context: dict[str, Any] | None = None,
     control_context: dict[str, Any] | None = None,
+    validation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     action = action_override or (event.action if event is not None else "idle")
     return {
@@ -358,6 +360,7 @@ def prediction_payload(
         "task": task,
         "policy_context": policy_context,
         "control_context": control_context,
+        "validation_context": validation_context,
     }
 
 
@@ -947,6 +950,7 @@ async def stream_replay(
     predictor = LivePredictor(method)
     await websocket.send_json({"type": "status", "message": "streaming dataset"})
     policy = create_interaction_policy(interaction_mode, policy_config, task)
+    validation_layer = GestureValidationLayer()
     records = read_jsonl(DEFAULT_REPLAY_MANIFEST)
     base_dir = DEFAULT_REPLAY_MANIFEST.parent
     start = time.perf_counter()
@@ -958,8 +962,12 @@ async def stream_replay(
             frame_times.append(frame_started)
             record = records[index % len(records)]
             tensor = load_landmark_npz(resolve_path(record.tensor_path, base_dir))
-            prediction = predictor.predict(tensor)
+            model_prediction = predictor.predict(tensor)
+            current_policy_context = policy_context(policy)
+            expected_label = str(current_policy_context.get("expected_label", "")) if current_policy_context else ""
             timestamp_ms = int((time.perf_counter() - start) * 1000)
+            validation = validation_layer.update_prediction(model_prediction, timestamp_ms=timestamp_ms, frame_index=index, expected_label=expected_label)
+            prediction = validation.to_prediction()
             event = None if policy is None else policy_event(policy, prediction, timestamp_ms)
             action_override = direct_action_for_prediction(prediction) if interaction_mode == "direct" else None
             processing_ms = (time.perf_counter() - frame_started) * 1000
@@ -979,8 +987,15 @@ async def stream_replay(
                 log_path=logger.public_path,
                 task=task,
                 policy_context=policy_context(policy),
+                validation_context=validation.to_dict(),
             )
-            logger.write(payload)
+            logger.write(
+                payload,
+                extra={
+                    "model_gesture": model_prediction.label,
+                    "model_confidence": model_prediction.confidence,
+                },
+            )
             await websocket.send_json(payload)
             index += 1
             await asyncio.sleep(max(0.0, interval_ms / 1000.0 - (time.perf_counter() - frame_started)))
@@ -1034,8 +1049,10 @@ async def stream_webcam(
 
     window: deque[tuple[np.ndarray, bool, float]] = deque(maxlen=32)
     live_controller = LiveLandmarkGestureController()
+    validation_layer = GestureValidationLayer()
     start = time.perf_counter()
     frame_times: deque[float] = deque(maxlen=30)
+    frame_index = 0
     await websocket.send_json({"type": "status", "message": "streaming camera"})
     try:
         while True:
@@ -1052,8 +1069,16 @@ async def stream_webcam(
             model_prediction = predictor.predict(tensor)
             current_policy_context = policy_context(policy)
             expected_label = str(current_policy_context.get("expected_label", "")) if current_policy_context else ""
-            prediction = live_controller.update(model_prediction, tensor, expected_label=expected_label)
+            controller_prediction = live_controller.update(model_prediction, tensor, expected_label=expected_label)
             timestamp_ms = int((time.perf_counter() - start) * 1000)
+            validation = validation_layer.update_prediction(
+                controller_prediction,
+                timestamp_ms=timestamp_ms,
+                frame_index=frame_index,
+                expected_label=expected_label,
+                landmark_stats=live_controller.context(),
+            )
+            prediction = validation.to_prediction()
             event = None if policy is None else policy_event(policy, prediction, timestamp_ms)
             action_override = direct_action_for_prediction(prediction) if interaction_mode == "direct" else None
             processing_ms = (time.perf_counter() - frame_started) * 1000
@@ -1076,6 +1101,7 @@ async def stream_webcam(
                 task=task,
                 policy_context=policy_context(policy),
                 control_context=live_controller.context(),
+                validation_context=validation.to_dict(),
             )
             logger.write(
                 payload,
@@ -1088,9 +1114,12 @@ async def stream_webcam(
                     "jpeg_quality": jpeg_quality,
                     "model_gesture": model_prediction.label,
                     "model_confidence": model_prediction.confidence,
+                    "controller_gesture": controller_prediction.label,
+                    "controller_confidence": controller_prediction.confidence,
                 },
             )
             await websocket.send_json(payload)
+            frame_index += 1
             await asyncio.sleep(max(0.0, frame_interval_ms / 1000.0 - (time.perf_counter() - frame_started)))
     finally:
         landmarker.close()

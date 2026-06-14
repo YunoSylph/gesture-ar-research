@@ -709,6 +709,30 @@ p {
   font-style: normal;
 }
 
+.validation-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.validation-mini-grid span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(185, 206, 211, 0.12);
+  border-radius: 6px;
+  background: rgba(10, 15, 18, 0.62);
+  padding: 6px;
+  color: #90a0a6;
+  font-size: 10px;
+}
+
+.validation-mini-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: #edf1f3;
+  font-size: 11px;
+}
+
 .gesture-pose {
   position: relative;
   display: block;
@@ -928,7 +952,7 @@ p {
   }
   45%,
   58% {
-    transform: rotate(-28deg) translate(-5px, 11px);
+    transform: rotate(-12deg) translate(-2px, 6px);
   }
 }
 
@@ -939,7 +963,7 @@ p {
   }
   45%,
   58% {
-    transform: rotate(-18deg) translate(8px, -7px);
+    transform: rotate(-30deg) translate(4px, -3px);
   }
 }
 
@@ -1719,5 +1743,325 @@ td {
 
   .official-summary dl {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Light thesis theme */
+:root {
+  color-scheme: light;
+  background: #f6f8fb;
+  color: #172027;
+}
+
+body,
+.app-shell,
+.results-page {
+  background: #f6f8fb;
+  color: #172027;
+}
+
+.control-rail {
+  border-right-color: #d9e2ea;
+  background: #ffffff;
+}
+
+.brand-row svg,
+.results-header svg,
+.camera-waiting svg {
+  color: #176b78;
+}
+
+p,
+.task-description,
+.task-list span,
+.camera-waiting span,
+.task-badge span,
+.axis-label {
+  color: #5d6b77;
+}
+
+.panel,
+.guide-card,
+.result-card,
+.stage-card,
+.official-summary,
+.hybrid-summary,
+.task-benchmark-summary {
+  border-color: #dce5ec;
+  background: #ffffff;
+  box-shadow: 0 12px 34px rgba(24, 38, 54, 0.07);
+}
+
+.panel-title,
+.metric-grid span,
+.run-summary span,
+.telemetry span,
+.stream-settings span,
+.task-select-label span,
+.session-controls span,
+.live-status-grid span,
+.task-run-mini span,
+.guide-card span,
+.guide-flow span,
+.stage-card span,
+.hybrid-summary dt,
+.official-summary dt,
+.result-card dt,
+th {
+  color: #687887;
+}
+
+.page-tabs button,
+.segmented button,
+.gesture-grid button,
+.transport button,
+.backend-row button,
+.task-list button,
+.task-run-actions button,
+.advanced-toggle,
+.task-select-label select,
+.stream-settings input {
+  border-color: #d8e2ea;
+  background: #f8fbfd;
+  color: #172027;
+}
+
+.page-tabs button.active,
+.segmented button.active,
+.task-list button.active,
+.status-pill.on {
+  border-color: #2d8c99;
+  background: #e4f5f7;
+  color: #0f4d58;
+}
+
+.gesture-grid button:hover,
+.transport button:hover,
+.segmented button:hover,
+.page-tabs button:hover,
+.task-list button:hover,
+.backend-row button:hover,
+.task-run-actions button:hover,
+.advanced-toggle:hover {
+  border-color: #c4902e;
+  background: #fff8ea;
+  color: #172027;
+}
+
+.task-run-status,
+.status-pill {
+  border-color: #d8e2ea;
+  background: #f8fbfd;
+  color: #526271;
+}
+
+.task-run-status.active,
+.task-run-status.complete {
+  border-color: #39a391;
+  background: #e7f8f3;
+  color: #116355;
+}
+
+.task-run-status.warn,
+.status-pill.warn {
+  border-color: #d3a13b;
+  background: #fff5dc;
+  color: #79540a;
+}
+
+.work-surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(238, 244, 249, 0.5)),
+    #eef3f7;
+}
+
+.ar-camera-feed {
+  filter: brightness(1.03) contrast(1.02) saturate(1.02);
+}
+
+.task-badge,
+.task-progress-overlay,
+.telemetry,
+.camera-waiting {
+  border-color: rgba(203, 216, 226, 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  color: #172027;
+  box-shadow: 0 18px 42px rgba(24, 38, 54, 0.12);
+}
+
+.task-progress-header span,
+.selected-indicator {
+  color: #a66f04;
+}
+
+.current-gesture-cue {
+  border-color: rgba(45, 140, 153, 0.28);
+  background: rgba(230, 247, 249, 0.92);
+}
+
+.current-gesture-cue span,
+.gesture-lock-panel span,
+.policy-context-panel span,
+.validation-mini-grid span {
+  color: #257783;
+}
+
+.current-gesture-cue strong,
+.gesture-lock-panel strong,
+.policy-context-panel strong,
+.validation-mini-grid strong,
+.guide-card strong,
+.stage-card strong,
+.hybrid-summary dd,
+.official-summary dd,
+.result-card dd,
+td,
+.bar-label span,
+.bar-label strong,
+.tradeoff-point strong {
+  color: #172027;
+}
+
+.current-gesture-cue p,
+.current-gesture-cue em,
+.gesture-lock-panel em,
+.guide-card p,
+.guide-card em {
+  color: #536673;
+}
+
+.current-gesture-cue em {
+  color: #805707;
+}
+
+.gesture-lock-panel,
+.policy-context-panel div,
+.validation-mini-grid span,
+.task-step-list div {
+  border-color: rgba(203, 216, 226, 0.76);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.gesture-lock-panel.locked,
+.task-step-list div.done {
+  border-color: rgba(57, 163, 145, 0.48);
+  background: rgba(231, 248, 243, 0.92);
+}
+
+.gesture-lock-panel.preparing,
+.task-step-list div.current {
+  border-color: rgba(211, 161, 59, 0.52);
+  background: rgba(255, 245, 220, 0.92);
+}
+
+.gesture-lock-panel.cooldown {
+  border-color: rgba(204, 76, 65, 0.34);
+  background: rgba(255, 237, 235, 0.9);
+}
+
+.gesture-lock-track,
+.bar-track {
+  border-color: #d4e0e8;
+  background: #eaf0f5;
+}
+
+.gesture-lock-track span,
+.bar-track span {
+  background: linear-gradient(90deg, #2d8c99, #64bfb1);
+}
+
+.gesture-lock-panel.preparing .gesture-lock-track span,
+.risk-chart .bar-track span {
+  background: linear-gradient(90deg, #c4902e, #e2bc63);
+}
+
+.gesture-lock-panel.cooldown .gesture-lock-track span {
+  background: linear-gradient(90deg, #cc4c41, #e2bc63);
+}
+
+.gesture-pose {
+  border-color: #d5e1e9;
+  background: #f8fbfd;
+}
+
+.pose-orbit {
+  border-color: rgba(45, 140, 153, 0.28);
+}
+
+.pose-hand i,
+.pose-hand .palm {
+  background: #d7e2e8;
+  box-shadow: inset 0 -2px 0 rgba(90, 111, 126, 0.16);
+}
+
+.pose-hand .wrist,
+.pose-hand .thumb,
+.pose-hand .ring,
+.pose-hand .pinky {
+  background: #c5d3dc;
+}
+
+.gesture-pose.click_2f .pose-touch,
+.gesture-pose.swipe_left .pose-arrow,
+.gesture-pose.swipe_right .pose-arrow {
+  border-color: #c4902e;
+  background: #c4902e;
+}
+
+.gesture-pose.swipe_left .pose-arrow::before,
+.gesture-pose.swipe_right .pose-arrow::before {
+  border-top-color: #c4902e;
+  border-left-color: #c4902e;
+}
+
+.ar-landmark-dot {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: #1d9b74;
+  box-shadow: 0 0 14px rgba(29, 155, 116, 0.55);
+}
+
+.ar-pointer-reticle {
+  border-color: rgba(23, 107, 120, 0.72);
+  background: rgba(255, 255, 255, 0.42);
+  color: #0f4d58;
+  box-shadow:
+    0 0 0 5px rgba(45, 140, 153, 0.16),
+    0 0 22px rgba(45, 140, 153, 0.42);
+}
+
+.ar-pointer-reticle::after {
+  border-color: rgba(45, 140, 153, 0.32);
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f4d58;
+}
+
+.results-table,
+.tradeoff-plot {
+  border-color: #dce5ec;
+  background: #ffffff;
+}
+
+.tradeoff-plot {
+  background:
+    linear-gradient(#e4ebf1 1px, transparent 1px),
+    linear-gradient(90deg, #e4ebf1 1px, transparent 1px),
+    #ffffff;
+  background-size: 100% 25%, 25% 100%;
+}
+
+.tradeoff-point i {
+  border-color: #ffffff;
+  background: #2d8c99;
+  box-shadow: 0 0 0 4px rgba(45, 140, 153, 0.16);
+}
+
+th,
+td {
+  border-bottom-color: #dce5ec;
+}
+
+@media (max-width: 820px) {
+  .control-rail {
+    border-bottom-color: #d9e2ea;
   }
 }
