@@ -134,6 +134,8 @@ def softmax(logits: np.ndarray) -> np.ndarray:
 class LivePredictor:
     def __init__(self, method: str, *, target_length: int = 32):
         self.method = method
+        self.effective_method = method
+        self.fallback_reason = ""
         self.target_length = target_length
         self.rule = RuleBasedRecognizer()
         self.artifact: dict[str, Any] | None = None
@@ -148,12 +150,23 @@ class LivePredictor:
         if method == "c0":
             return
         if method in {"onnx", "c3"}:
+            if not DEFAULT_METHOD_ARTIFACTS["onnx"].exists():
+                self._use_rule_fallback(f"ONNX artifact is missing: {DEFAULT_METHOD_ARTIFACTS['onnx']}")
+                return
             self._load_onnx(DEFAULT_METHOD_ARTIFACTS["onnx"])
             if method == "c3":
                 self.hybrid_config = DEFAULT_LIVE_HYBRID_CONFIG
                 self.geometry_prior = GeometryPriorRecognizer(self.hybrid_config)
             return
         if method == "c6_ensemble":
+            missing = [
+                path
+                for path in [DEFAULT_METHOD_ARTIFACTS["c1t_tcn_validated"], DEFAULT_METHOD_ARTIFACTS["c1t_tcn_augmented"]]
+                if not path.exists()
+            ]
+            if missing:
+                self._use_rule_fallback(f"C6 artifacts are missing: {', '.join(str(path) for path in missing)}")
+                return
             self.c6_recognizer = C6EnsembleRecognizer(
                 C6EnsembleConfig(
                     model_paths=[
@@ -166,9 +179,16 @@ class LivePredictor:
             )
             return
         if method in {"c1_rf", "c1t_tcn"}:
+            if not DEFAULT_METHOD_ARTIFACTS[method].exists():
+                self._use_rule_fallback(f"Model artifact is missing: {DEFAULT_METHOD_ARTIFACTS[method]}")
+                return
             self._load_artifact(DEFAULT_METHOD_ARTIFACTS[method])
             return
         raise PipelineError(f"Unknown live recognizer method '{method}'.")
+
+    def _use_rule_fallback(self, reason: str) -> None:
+        self.effective_method = "c0_rule_fallback"
+        self.fallback_reason = reason
 
     def _load_artifact(self, path: Path) -> None:
         from research_pipeline.models.artifacts import load_artifact
@@ -204,7 +224,7 @@ class LivePredictor:
     def predict(self, tensor: LandmarkTensor) -> Prediction:
         if not tensor.sequence_mask.any():
             return prediction_from_scores({"no_gesture": 1.0})
-        if self.method == "c0":
+        if self.method == "c0" or self.effective_method == "c0_rule_fallback":
             return self.rule.predict(tensor)
 
         sequence = preprocess_dual_view(tensor, target_length=self.target_length)
@@ -318,6 +338,8 @@ def prediction_payload(
     prediction: Prediction,
     timestamp_ms: int,
     event: Any | None,
+    effective_method: str = "",
+    fallback_reason: str = "",
     sample_id: str = "",
     target_label: str = "",
     detection_rate: float = 0.0,
@@ -340,6 +362,8 @@ def prediction_payload(
         "type": "prediction",
         "timestamp_ms": timestamp_ms,
         "method": method,
+        "effective_method": effective_method or method,
+        "fallback_reason": fallback_reason,
         "source": source,
         "gesture": prediction.label,
         "confidence": prediction.confidence,
@@ -948,6 +972,8 @@ async def stream_replay(
 ) -> None:
     await websocket.send_json({"type": "status", "message": "loading model"})
     predictor = LivePredictor(method)
+    if predictor.fallback_reason:
+        await websocket.send_json({"type": "status", "message": f"model fallback: {predictor.effective_method}"})
     await websocket.send_json({"type": "status", "message": "streaming dataset"})
     policy = create_interaction_policy(interaction_mode, policy_config, task)
     validation_layer = GestureValidationLayer()
@@ -977,6 +1003,8 @@ async def stream_replay(
                 prediction=prediction,
                 timestamp_ms=timestamp_ms,
                 event=event,
+                effective_method=predictor.effective_method,
+                fallback_reason=predictor.fallback_reason,
                 action_override=action_override,
                 sample_id=record.sample_id,
                 target_label=record.target_label,
@@ -1028,6 +1056,8 @@ async def stream_webcam(
 
     await websocket.send_json({"type": "status", "message": "loading model"})
     predictor = LivePredictor(method)
+    if predictor.fallback_reason:
+        await websocket.send_json({"type": "status", "message": f"model fallback: {predictor.effective_method}"})
     await websocket.send_json({"type": "status", "message": "opening camera"})
     policy = create_interaction_policy(interaction_mode, policy_config, task)
     landmarker = FrameLandmarker()
@@ -1088,6 +1118,8 @@ async def stream_webcam(
                 prediction=prediction,
                 timestamp_ms=timestamp_ms,
                 event=event,
+                effective_method=predictor.effective_method,
+                fallback_reason=predictor.fallback_reason,
                 action_override=action_override,
                 detection_rate=float(tensor.sequence_mask.mean()),
                 preview_image=encode_preview_frame(cv2, frame, width=preview_width, quality=jpeg_quality) if send_preview else None,

@@ -90,6 +90,8 @@ type StreamMessage = {
   type: "prediction" | "error" | "status";
   gesture?: GestureId;
   confidence?: number;
+  effective_method?: string;
+  fallback_reason?: string;
   action?: ActionId;
   event?: {
     action: ActionId;
@@ -1324,6 +1326,7 @@ function App() {
   const [detectionRate, setDetectionRate] = useState("--");
   const [streamFps, setStreamFps] = useState("--");
   const [processingMs, setProcessingMs] = useState("--");
+  const [effectiveMethod, setEffectiveMethod] = useState("waiting");
   const [previewImage, setPreviewImage] = useState("");
   const [landmarks, setLandmarks] = useState<number[][]>([]);
   const [cameraStats, setCameraStats] = useState<CameraStats | null>(null);
@@ -1344,11 +1347,7 @@ function App() {
     cameraStats?.width && cameraStats?.height
       ? `${cameraStats.width}x${cameraStats.height}`
       : `${FAST_CAMERA_WIDTH}x${FAST_CAMERA_HEIGHT}`;
-  const cameraFeedUrl =
-    live && source === "webcam"
-      ? `${BACKEND_HTTP_URL}/video_feed?camera=${cameraIndex}&camera_width=${FAST_CAMERA_WIDTH}&camera_height=${FAST_CAMERA_HEIGHT}` +
-        `&preview_width=${previewWidth}&jpeg_quality=${jpegQuality}&mirror=true&fps=${targetFps}`
-      : "";
+  const cameraImageSrc = previewImage;
   const cameraMessage =
     backendStatus === "backend unavailable"
       ? {
@@ -1396,6 +1395,7 @@ function App() {
     setDetectionRate("--");
     setStreamFps("--");
     setProcessingMs("--");
+    setEffectiveMethod("waiting");
     setCameraStats(null);
     setPointerScreen(null);
     setPolicyContext(null);
@@ -1424,6 +1424,7 @@ function App() {
           : "stream stopped"
       );
       setBackendConfidence("--");
+      setEffectiveMethod("waiting");
       setPointerScreen(null);
       setPolicyContext(null);
       setControlContext(null);
@@ -1438,7 +1439,7 @@ function App() {
       `&interaction=${interactionMode}&threshold=${threshold}&stable_frames=${stableFrames}` +
       `&preview_width=${previewWidth}&jpeg_quality=${jpegQuality}&camera_width=${FAST_CAMERA_WIDTH}&camera_height=${FAST_CAMERA_HEIGHT}` +
       `&capture_fps=${captureFps}` +
-      `&mirror=true&log=true&preview=false&task=${task}&max_log_mb=50`;
+      `&mirror=true&log=true&preview=true&task=${task}&max_log_mb=50`;
     const socket = new WebSocket(url);
     wsRef.current = socket;
     let closedByCleanup = false;
@@ -1469,6 +1470,7 @@ function App() {
       setDetectionRate(typeof payload.detection_rate === "number" ? payload.detection_rate.toFixed(2) : "--");
       setStreamFps(typeof payload.fps === "number" ? payload.fps.toFixed(1) : "--");
       setProcessingMs(typeof payload.processing_ms === "number" ? payload.processing_ms.toFixed(0) : "--");
+      setEffectiveMethod(payload.effective_method ?? method);
       setPreviewImage(payload.preview_image ?? "");
       setLandmarks(payload.landmarks ?? []);
       setCameraStats(payload.camera ?? null);
@@ -1778,17 +1780,17 @@ function App() {
       ) : (
         <section className="work-surface">
           <SceneCanvas state={sceneState} task={task} />
-          {previewImage || cameraFeedUrl ? (
-            <img className="ar-camera-feed" src={previewImage || cameraFeedUrl} alt="Live camera AR background" />
+          {cameraImageSrc ? (
+            <img className="ar-camera-feed" src={cameraImageSrc} alt="Live camera AR background" />
           ) : null}
-          {source === "webcam" && !previewImage && !cameraFeedUrl ? (
+          {source === "webcam" && !cameraImageSrc ? (
             <div className="camera-waiting">
               <Video size={28} />
               <strong>{cameraMessage.title}</strong>
               <span>{cameraMessage.body}</span>
             </div>
           ) : null}
-          {(previewImage || cameraFeedUrl) &&
+          {cameraImageSrc &&
             landmarks.map((point, index) => (
               <span
                 key={`${point[0]}-${point[1]}-${index}`}
@@ -1796,7 +1798,7 @@ function App() {
                 style={{ left: `${point[0] * 100}%`, top: `${point[1] * 100}%` }}
               />
             ))}
-          {(previewImage || cameraFeedUrl) && pointerScreen ? (
+          {cameraImageSrc && pointerScreen ? (
             <span className="ar-pointer-reticle" style={{ left: `${pointerScreen.x * 100}%`, top: `${pointerScreen.y * 100}%` }}>
               <Crosshair size={28} strokeWidth={1.8} />
             </span>
@@ -1838,6 +1840,10 @@ function App() {
             <div>
               <span>Proc</span>
               <strong>{processingMs === "--" ? "--" : `${processingMs} ms`}</strong>
+            </div>
+            <div>
+              <span>Model</span>
+              <strong>{effectiveMethod}</strong>
             </div>
             <div className={sceneState.selected ? "selected-indicator on" : "selected-indicator"}>
               <Sparkles size={16} />

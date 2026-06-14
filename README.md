@@ -11,6 +11,18 @@ The project follows `deep-research-report.md`:
 - recognition and interaction replay benchmarks;
 - Windows training mainline with separated ONNX/Core ML export stages.
 
+## One-Click Live Launch
+
+On Windows, use the launcher in the repository root:
+
+```powershell
+.\START_PROJECT.bat
+```
+
+It creates/updates `.venv311`, installs backend camera dependencies, installs frontend dependencies, starts the FastAPI live backend on `http://127.0.0.1:8000`, starts the React/Three.js interface on `http://127.0.0.1:5173`, waits for both services, and opens the UI.
+
+Close the `Gesture AR Backend` and `Gesture AR Frontend` console windows to stop the project.
+
 ## Quick Smoke
 
 ```powershell
