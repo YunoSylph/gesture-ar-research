@@ -1,0 +1,13 @@
+.venv/
+.venv311/
+.vs/
+__pycache__/
+*.pyc
+.pytest_cache/
+artifacts/
+data/raw/
+data/processed/**/*.npz
+node_modules/
+dist/
+*.onnx
+*.mlpackage/

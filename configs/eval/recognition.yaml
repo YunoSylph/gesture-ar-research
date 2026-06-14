@@ -1,0 +1,6 @@
+manifest: data/interim/manifests/ipn_subset_landmarks.jsonl
+model_path: artifacts/models/c1t_temporal.pkl
+variant: artifact
+target_length: 32
+output_report: artifacts/reports/recognition.json
+

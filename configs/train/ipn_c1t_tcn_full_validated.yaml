@@ -1,0 +1,13 @@
+model_type: c1t_tcn
+backend: torch
+manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
+output_model: artifacts/models/ipn_c1t_tcn_full_validated.pkl
+seed: 13
+target_length: 32
+epochs: 90
+batch_size: 64
+learning_rate: 0.001
+weight_decay: 0.01
+validation_split: 0.15
+early_stopping_patience: 10
+early_stopping_min_delta: 0.0001

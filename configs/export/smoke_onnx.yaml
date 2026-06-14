@@ -1,0 +1,5 @@
+model_path: artifacts/smoke/public/temporal_prototype.pkl
+output_path: artifacts/smoke/export/gesture_classifier.onnx
+input_name: landmarks
+target_length: 32
+

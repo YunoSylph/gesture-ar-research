@@ -1,0 +1,2 @@
+"""Desktop webcam demo package."""
+

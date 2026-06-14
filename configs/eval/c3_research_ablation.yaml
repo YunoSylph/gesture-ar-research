@@ -1,0 +1,75 @@
+model_path: artifacts/models/ipn_c1t_tcn_full_validated.pkl
+calibration_manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
+evaluation_manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
+seed: 20260525
+max_calibration_records: 384
+output_report: artifacts/reports/c3_research_ablation.json
+
+base_hybrid:
+  neural_weight: 0.94
+  geometry_weight: 0.06
+  enable_safety_gate: true
+  action_threshold: 0.46
+  no_gesture_margin: 0.03
+  low_quality_confidence: 0.42
+  low_quality_no_gesture_boost: 0.12
+  weak_motion_no_gesture_boost: 0.06
+  swipe_motion_min: 0.055
+  zoom_delta_min: 0.035
+  click_distance_max: 0.075
+
+grid:
+  neural_weight: [0.92, 0.96]
+  geometry_weight: [0.04, 0.08]
+  action_threshold: [0.44, 0.50]
+  no_gesture_margin: [0.03]
+
+objective:
+  false_action_penalty: 0.25
+  drop_penalty: 0.10
+
+calibration_robustness:
+  - name: clean
+    kind: clean
+  - name: noise_mild
+    kind: gaussian_noise
+    sigma: 0.006
+  - name: combined_mild
+    kind: combined
+    sigma: 0.004
+    drop_rate: 0.10
+    mask_rate: 0.06
+
+evaluation_robustness:
+  - name: clean
+    kind: clean
+  - name: noise_mild
+    kind: gaussian_noise
+    sigma: 0.006
+  - name: noise_strong
+    kind: gaussian_noise
+    sigma: 0.014
+  - name: frame_drop_30
+    kind: frame_drop
+    drop_rate: 0.30
+  - name: landmark_mask_20
+    kind: landmark_mask
+    mask_rate: 0.20
+  - name: temporal_jitter_2
+    kind: temporal_jitter
+    jitter: 2
+  - name: combined_mild
+    kind: combined
+    sigma: 0.004
+    drop_rate: 0.10
+    mask_rate: 0.06
+
+policy_scenario:
+  name: clean
+  kind: clean
+policy_frames_per_clip: 3
+c2_policy:
+  activation_threshold: 0.62
+  stable_frames: 2
+  cooldown_ms: 250
+  no_gesture_reset_frames: 3

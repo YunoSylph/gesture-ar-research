@@ -1,0 +1,29 @@
+model_type: c1t_tcn
+backend: torch
+manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
+output_model: artifacts/models/ipn_c1t_tcn_augmented.pkl
+seed: 20260528
+target_length: 32
+epochs: 140
+batch_size: 64
+learning_rate: 0.0008
+weight_decay: 0.008
+validation_split: 0.15
+early_stopping_patience: 18
+early_stopping_min_delta: 0.0001
+
+tcn_channels: [96, 96, 128, 128]
+kernel_size: 5
+dropout: 0.20
+pooling: avgmax
+
+balanced_sampler: true
+focal_gamma: 1.2
+label_smoothing: 0.03
+augmentation:
+  noise_sigma: 0.010
+  scale_std: 0.015
+  feature_dropout: 0.035
+  temporal_shift: 2
+  time_mask_prob: 0.18
+  time_mask_max_width: 4

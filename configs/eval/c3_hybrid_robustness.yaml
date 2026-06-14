@@ -1,0 +1,52 @@
+manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
+model_path: artifacts/models/ipn_c1t_tcn_full_validated.pkl
+target_length: 32
+seed: 20260525
+output_report: artifacts/reports/c3_hybrid_robustness.json
+output_clean_report: artifacts/reports/c3_hybrid_clean_recognition.json
+hybrid:
+  neural_weight: 0.94
+  geometry_weight: 0.06
+  action_threshold: 0.46
+  no_gesture_margin: 0.03
+  low_quality_confidence: 0.42
+  low_quality_no_gesture_boost: 0.12
+  weak_motion_no_gesture_boost: 0.06
+  swipe_motion_min: 0.055
+  zoom_delta_min: 0.035
+  click_distance_max: 0.075
+robustness:
+  - name: clean
+    kind: clean
+  - name: noise_mild
+    kind: gaussian_noise
+    sigma: 0.006
+  - name: noise_strong
+    kind: gaussian_noise
+    sigma: 0.014
+  - name: frame_drop_15
+    kind: frame_drop
+    drop_rate: 0.15
+  - name: frame_drop_30
+    kind: frame_drop
+    drop_rate: 0.30
+  - name: landmark_mask_10
+    kind: landmark_mask
+    mask_rate: 0.10
+  - name: landmark_mask_20
+    kind: landmark_mask
+    mask_rate: 0.20
+  - name: temporal_jitter_2
+    kind: temporal_jitter
+    jitter: 2
+  - name: translation_shift
+    kind: translation
+    translation: 0.025
+  - name: scale_shift
+    kind: scale
+    scale: 0.12
+  - name: combined_mild
+    kind: combined
+    sigma: 0.004
+    drop_rate: 0.10
+    mask_rate: 0.06

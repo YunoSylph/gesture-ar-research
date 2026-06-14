@@ -1,0 +1,10 @@
+mode: webcam
+model_path: artifacts/models/c1t_temporal.pkl
+policy:
+  activation_threshold: 0.62
+  stable_frames: 2
+  cooldown_ms: 250
+  no_gesture_reset_frames: 3
+logging:
+  output_path: artifacts/logs/webcam_demo.jsonl
+

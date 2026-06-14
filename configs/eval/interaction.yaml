@@ -1,0 +1,8 @@
+timeline: artifacts/smoke/demo/interaction_timeline.jsonl
+policy:
+  activation_threshold: 0.62
+  stable_frames: 2
+  cooldown_ms: 250
+  no_gesture_reset_frames: 3
+output_report: artifacts/reports/interaction.json
+

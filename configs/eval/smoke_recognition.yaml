@@ -1,0 +1,6 @@
+manifest: artifacts/smoke/public/synthetic_landmarks.jsonl
+model_path: artifacts/smoke/public/temporal_prototype.pkl
+variant: artifact
+target_length: 32
+output_report: artifacts/reports/smoke_recognition.json
+

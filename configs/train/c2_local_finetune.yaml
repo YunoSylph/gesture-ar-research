@@ -1,0 +1,8 @@
+model_type: c1t_auto
+backend: auto
+manifest: data/interim/manifests/merged_landmarks.jsonl
+output_model: artifacts/models/c2_local_temporal.pkl
+seed: 23
+target_length: 32
+stage: local_adaptation
+

@@ -1,0 +1,5 @@
+model_path: artifacts/models/c1t_temporal.pkl
+output_path: artifacts/export/gesture_classifier.onnx
+input_name: landmarks
+target_length: 32
+

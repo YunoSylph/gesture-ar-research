@@ -1,0 +1,6 @@
+model_path: artifacts/smoke/public/temporal_prototype.pkl
+output_path: artifacts/smoke/export/GestureClassifier.mlpackage
+minimum_deployment_target: iOS15
+convert_to: mlprogram
+compute_precision: FLOAT16
+

@@ -1,0 +1,5 @@
+manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
+model_path: artifacts/models/ipn_c1t_tcn_full_validated.pkl
+variant: artifact
+target_length: 32
+output_report: artifacts/reports/ipn_c1t_tcn_full_validated_recognition.json

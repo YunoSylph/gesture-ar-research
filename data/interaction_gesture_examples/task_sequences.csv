@@ -1,0 +1,61 @@
+task,step,gesture,action,effect
+Object Control,1,point_2f,pointer_hover,acquire the virtual object with the AR cursor
+Object Control,2,click_2f,select_confirm,select the object
+Object Control,3,zoom_in,zoom_in,scale object up
+Object Control,4,zoom_out,zoom_out,scale object down
+Gallery Navigation,1,swipe_right,navigate_next,move to the next gallery item
+Gallery Navigation,2,swipe_right,navigate_next,move to the next gallery item again
+Gallery Navigation,3,swipe_left,navigate_previous,return to the previous item
+Gallery Navigation,4,click_2f,select_confirm,confirm the current item
+AR Scroll List,1,swipe_right,navigate_next,scroll the floating list down
+AR Scroll List,2,swipe_right,navigate_next,scroll the floating list down again
+AR Scroll List,3,swipe_left,navigate_previous,scroll the floating list up
+AR Scroll List,4,click_2f,select_confirm,open the highlighted row
+Spatial Browser,1,point_2f,pointer_hover,aim at the current AR card
+Spatial Browser,2,swipe_right,navigate_next,browse to the next AR card
+Spatial Browser,3,swipe_right,navigate_next,browse to the next AR card again
+Spatial Browser,4,click_2f,select_confirm,open the centered AR card
+Spatial Browser,5,zoom_in,zoom_in,inspect the opened card closer
+Virtual Sorting,1,point_2f,pointer_hover,point at a virtual item in the source bin
+Virtual Sorting,2,click_2f,select_confirm,pick the highlighted item
+Virtual Sorting,3,swipe_right,navigate_next,move the held item toward the destination bin
+Virtual Sorting,4,click_2f,select_confirm,drop the item into the destination bin
+Virtual Sorting,5,swipe_left,navigate_previous,return the hand cursor to the source bin
+Target Selection,1,point_2f,pointer_hover,hover the first target
+Target Selection,2,click_2f,select_confirm,confirm the first target
+Target Selection,3,point_2f,pointer_hover,hover the second target
+Target Selection,4,click_2f,select_confirm,confirm the second target
+Object Placement,1,point_2f,pointer_hover,aim at the placement point
+Object Placement,2,click_2f,select_confirm,anchor the object
+Object Placement,3,zoom_in,zoom_in,fit the object scale
+Object Placement,4,swipe_right,navigate_next,orient the object
+Object Inspection,1,click_2f,select_confirm,select object for inspection
+Object Inspection,2,swipe_right,navigate_next,rotate to next detail side
+Object Inspection,3,zoom_in,zoom_in,inspect details closer
+Object Inspection,4,swipe_left,navigate_previous,rotate back
+Object Inspection,5,zoom_out,zoom_out,reset scale
+Distance Measure,1,point_2f,pointer_hover,aim the first measurement point
+Distance Measure,2,click_2f,select_confirm,pin the first point
+Distance Measure,3,point_2f,pointer_hover,aim the second measurement point
+Distance Measure,4,click_2f,select_confirm,pin the second point
+Distance Measure,5,zoom_in,zoom_in,magnify the measured segment
+Assembly Assist,1,point_2f,pointer_hover,point at a virtual part
+Assembly Assist,2,click_2f,select_confirm,pick the part
+Assembly Assist,3,swipe_right,navigate_next,move to the next slot
+Assembly Assist,4,point_2f,pointer_hover,align with the slot
+Assembly Assist,5,click_2f,select_confirm,lock the part
+Info Panel,1,point_2f,pointer_hover,point at an object
+Info Panel,2,click_2f,select_confirm,open the info panel
+Info Panel,3,swipe_right,navigate_next,next metadata panel
+Info Panel,4,swipe_left,navigate_previous,previous metadata panel
+Info Panel,5,click_2f,select_confirm,close or confirm panel
+Precision Docking,1,point_2f,pointer_hover,acquire docking reticle
+Precision Docking,2,swipe_left,navigate_previous,nudge left
+Precision Docking,3,swipe_right,navigate_next,nudge right
+Precision Docking,4,zoom_out,zoom_out,fine scale down
+Precision Docking,5,click_2f,select_confirm,dock object
+Guided Tour,1,swipe_right,navigate_next,move to waypoint one
+Guided Tour,2,click_2f,select_confirm,focus the waypoint
+Guided Tour,3,zoom_in,zoom_in,zoom into the selected item
+Guided Tour,4,swipe_right,navigate_next,move to waypoint two
+Guided Tour,5,swipe_left,navigate_previous,return to previous waypoint

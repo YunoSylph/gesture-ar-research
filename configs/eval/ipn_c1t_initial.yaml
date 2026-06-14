@@ -1,0 +1,6 @@
+manifest: data/interim/manifests/ipn_test_initial_landmarks.jsonl
+model_path: artifacts/models/ipn_c1t_initial.pkl
+variant: artifact
+target_length: 32
+output_report: artifacts/reports/ipn_c1t_initial_recognition.json
+

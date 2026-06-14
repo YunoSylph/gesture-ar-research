@@ -1,0 +1,7 @@
+model_type: c1_random_forest
+manifest: data/interim/manifests/ipn_train_initial_landmarks.jsonl
+output_model: artifacts/models/ipn_c1_rf_initial.pkl
+seed: 13
+target_length: 32
+n_estimators: 300
+

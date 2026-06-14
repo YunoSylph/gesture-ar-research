@@ -1,0 +1,7 @@
+model_path: artifacts/models/ipn_c1t_tcn_full.pkl
+output_path: artifacts/export/GestureClassifier.mlpackage
+minimum_deployment_target: iOS15
+convert_to: mlprogram
+compute_precision: FLOAT16
+input_name: landmarks
+target_length: 32

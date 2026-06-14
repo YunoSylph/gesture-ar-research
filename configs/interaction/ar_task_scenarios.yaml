@@ -1,0 +1,344 @@
+tolerance_ms: 450
+tasks:
+  object:
+    id: object_basic
+    label: Object control smoke scenario
+    expected_actions:
+      - id: object_point
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: object_select
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: object_zoom_in
+        action: zoom_in
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: object_zoom_out
+        action: zoom_out
+        start_ms: 6500
+        target_ms: 8500
+        end_ms: 12000
+  carousel:
+    id: carousel_navigation
+    label: Gallery navigation scenario
+    expected_actions:
+      - id: carousel_next_1
+        action: navigate_next
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 4000
+      - id: carousel_next_2
+        action: navigate_next
+        start_ms: 2000
+        target_ms: 4500
+        end_ms: 7000
+      - id: carousel_previous
+        action: navigate_previous
+        start_ms: 4500
+        target_ms: 7000
+        end_ms: 10000
+      - id: carousel_select
+        action: select_confirm
+        start_ms: 7000
+        target_ms: 9500
+        end_ms: 13000
+  scroll:
+    id: ar_scroll_list
+    label: AR scroll list scenario
+    expected_actions:
+      - id: scroll_next_1
+        action: navigate_next
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 4000
+      - id: scroll_next_2
+        action: navigate_next
+        start_ms: 2000
+        target_ms: 4500
+        end_ms: 7000
+      - id: scroll_previous
+        action: navigate_previous
+        start_ms: 4500
+        target_ms: 7000
+        end_ms: 10000
+      - id: scroll_select
+        action: select_confirm
+        start_ms: 7000
+        target_ms: 9500
+        end_ms: 13000
+  browser:
+    id: spatial_browser
+    label: Spatial browser scenario
+    expected_actions:
+      - id: browser_point
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: browser_next_1
+        action: navigate_next
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: browser_next_2
+        action: navigate_next
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: browser_open
+        action: select_confirm
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: browser_zoom
+        action: zoom_in
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  transfer:
+    id: virtual_sorting
+    label: Virtual sorting scenario
+    expected_actions:
+      - id: transfer_point
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: transfer_pick
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: transfer_move
+        action: navigate_next
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: transfer_drop
+        action: select_confirm
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: transfer_return
+        action: navigate_previous
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  targets:
+    id: target_selection
+    label: Pointer target selection scenario
+    expected_actions:
+      - id: target_hover
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 5000
+      - id: target_confirm
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 4500
+        end_ms: 9000
+  placement:
+    id: object_placement
+    label: Object placement scenario
+    expected_actions:
+      - id: placement_aim
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: placement_anchor
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: placement_fit
+        action: zoom_in
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: placement_orient
+        action: navigate_next
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+  inspection:
+    id: object_inspection
+    label: Object inspection scenario
+    expected_actions:
+      - id: inspection_select
+        action: select_confirm
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: inspection_rotate
+        action: navigate_next
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: inspection_zoom
+        action: zoom_in
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: inspection_back
+        action: navigate_previous
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: inspection_reset
+        action: zoom_out
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  measurement:
+    id: distance_measure
+    label: Distance measure scenario
+    expected_actions:
+      - id: measurement_aim_a
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: measurement_pin_a
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: measurement_aim_b
+        action: pointer_hover
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: measurement_pin_b
+        action: select_confirm
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: measurement_zoom
+        action: zoom_in
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  assembly:
+    id: assembly_assist
+    label: Assembly assist scenario
+    expected_actions:
+      - id: assembly_point
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: assembly_pick
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: assembly_next
+        action: navigate_next
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: assembly_align
+        action: pointer_hover
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: assembly_lock
+        action: select_confirm
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  info:
+    id: info_panel
+    label: Info panel scenario
+    expected_actions:
+      - id: info_point
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: info_open
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: info_next
+        action: navigate_next
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: info_previous
+        action: navigate_previous
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: info_close
+        action: select_confirm
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  docking:
+    id: precision_docking
+    label: Precision docking scenario
+    expected_actions:
+      - id: docking_acquire
+        action: pointer_hover
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: docking_left
+        action: navigate_previous
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: docking_right
+        action: navigate_next
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: docking_scale
+        action: zoom_out
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: docking_confirm
+        action: select_confirm
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500
+  tour:
+    id: guided_tour
+    label: Guided tour scenario
+    expected_actions:
+      - id: tour_next_1
+        action: navigate_next
+        start_ms: 0
+        target_ms: 1500
+        end_ms: 3500
+      - id: tour_focus
+        action: select_confirm
+        start_ms: 1500
+        target_ms: 3500
+        end_ms: 6500
+      - id: tour_zoom
+        action: zoom_in
+        start_ms: 3500
+        target_ms: 6000
+        end_ms: 9000
+      - id: tour_next_2
+        action: navigate_next
+        start_ms: 6000
+        target_ms: 8500
+        end_ms: 12000
+      - id: tour_back
+        action: navigate_previous
+        start_ms: 8500
+        target_ms: 11000
+        end_ms: 14500

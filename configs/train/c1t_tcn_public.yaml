@@ -1,0 +1,10 @@
+model_type: c1t_auto
+backend: auto
+manifest: data/interim/manifests/ipn_subset_landmarks.jsonl
+output_model: artifacts/models/c1t_temporal.pkl
+seed: 13
+target_length: 32
+optimizer: AdamW
+loss: weighted_cross_entropy
+early_stopping_patience: 10
+

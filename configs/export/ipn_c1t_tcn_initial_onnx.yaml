@@ -1,0 +1,6 @@
+model_path: artifacts/models/ipn_c1t_tcn_initial.pkl
+output_path: artifacts/export/ipn_c1t_tcn_initial.onnx
+input_name: landmarks
+target_length: 32
+opset_version: 18
+

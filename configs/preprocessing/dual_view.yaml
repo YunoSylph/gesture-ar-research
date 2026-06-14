@@ -1,0 +1,18 @@
+target_length: 32
+coord_space: image_normalized_xyz
+pose_stream:
+  center: wrist
+  scale: palm_size
+motion_stream:
+  include_centroid: true
+  include_wrist: true
+  include_deltas: true
+  preserve_global_trajectory: true
+augmentation:
+  mirroring: true
+  directed_label_swap:
+    swipe_left: swipe_right
+    swipe_right: swipe_left
+  temporal_jitter: true
+  coordinate_noise_std: 0.003
+

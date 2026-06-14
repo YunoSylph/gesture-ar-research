@@ -1,0 +1,13 @@
+name: ipn_hand_project_subset
+source_dataset: ipn_hand
+target_labels:
+  - no_gesture
+  - point_2f
+  - click_2f
+  - swipe_left
+  - swipe_right
+  - zoom_in
+  - zoom_out
+manifest: data/interim/manifests/ipn_subset_landmarks.jsonl
+tensor_root: data/processed/public_landmarks
+

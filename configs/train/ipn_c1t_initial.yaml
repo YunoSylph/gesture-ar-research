@@ -1,0 +1,6 @@
+model_type: temporal_prototype
+manifest: data/interim/manifests/ipn_train_initial_landmarks.jsonl
+output_model: artifacts/models/ipn_c1t_initial.pkl
+seed: 13
+target_length: 32
+

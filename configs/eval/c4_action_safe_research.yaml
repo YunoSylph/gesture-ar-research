@@ -1,0 +1,88 @@
+model_path: artifacts/models/ipn_c1t_tcn_full_validated.pkl
+calibration_manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
+evaluation_manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
+output_report: artifacts/reports/c4_action_safe_research.json
+risk_costs_path: configs/interaction/action_risk_costs.yaml
+seed: 20260526
+max_calibration_records: 384
+calibration_sample_strategy: stratified
+evaluation_sample_strategy: first
+bootstrap_iterations: 1000
+
+hybrid:
+  neural_weight: 0.96
+  geometry_weight: 0.08
+  enable_safety_gate: true
+  action_threshold: 0.44
+  no_gesture_margin: 0.03
+  low_quality_confidence: 0.42
+  low_quality_no_gesture_boost: 0.12
+  weak_motion_no_gesture_boost: 0.06
+  swipe_motion_min: 0.055
+  zoom_delta_min: 0.035
+  click_distance_max: 0.075
+
+c2_policy:
+  activation_threshold: 0.62
+  stable_frames: 2
+  cooldown_ms: 250
+  no_gesture_reset_frames: 3
+
+policy_frames_per_clip: 3
+policy_frame_step_ms: 100
+policy_separator_ms: 220
+
+objective:
+  precision_weight: 0.45
+  recall_weight: 0.45
+  unintended_penalty: 0.55
+  false_rate_penalty: 0.01
+  min_recall: 0.88
+  safety_min_recall: 0.88
+  recall_floor_penalty: 2.0
+
+policy_grid:
+  default_threshold: [0.62, 0.65, 0.70, 0.75, 0.80, 0.85]
+  pointer_delta: [-0.08, 0.0]
+  high_risk_delta: [0.0, 0.05]
+  default_stable_frames: [1, 2]
+  high_risk_stable_frames: [2, 3]
+  cooldown_ms: [200, 250, 350]
+  min_score_margin: [0.0, 0.05]
+  no_gesture_reset_frames: [3]
+
+calibration_scenarios:
+  - name: clean
+    kind: clean
+  - name: noise_mild
+    kind: gaussian_noise
+    sigma: 0.006
+  - name: combined_mild
+    kind: combined
+    sigma: 0.004
+    drop_rate: 0.10
+    mask_rate: 0.06
+
+evaluation_scenarios:
+  - name: clean
+    kind: clean
+  - name: noise_mild
+    kind: gaussian_noise
+    sigma: 0.006
+  - name: noise_strong
+    kind: gaussian_noise
+    sigma: 0.014
+  - name: frame_drop_30
+    kind: frame_drop
+    drop_rate: 0.30
+  - name: landmark_mask_20
+    kind: landmark_mask
+    mask_rate: 0.20
+  - name: temporal_jitter_2
+    kind: temporal_jitter
+    jitter: 2
+  - name: combined_mild
+    kind: combined
+    sigma: 0.004
+    drop_rate: 0.10
+    mask_rate: 0.06

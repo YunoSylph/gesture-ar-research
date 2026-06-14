@@ -1,0 +1,6 @@
+model_type: c1_random_forest
+manifest: artifacts/smoke/public/synthetic_landmarks.jsonl
+output_model: artifacts/models/c1_rf.pkl
+seed: 13
+target_length: 32
+n_estimators: 200

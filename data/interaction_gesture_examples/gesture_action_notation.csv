@@ -1,0 +1,8 @@
+gesture,action,short_notation,primary_effect,used_in_tasks
+no_gesture,idle,IDLE,no command; task waits,Object Control; Gallery Navigation; AR Scroll List; Spatial Browser; Virtual Sorting; Target Selection; Object Placement; Object Inspection; Distance Measure; Assembly Assist; Info Panel; Precision Docking; Guided Tour
+point_2f,pointer_hover,POINT,cursor/reticle follows the hand target,Object Control; Spatial Browser; Virtual Sorting; Target Selection; Object Placement; Distance Measure; Assembly Assist; Info Panel; Precision Docking
+click_2f,select_confirm,CLICK,confirm selection; anchor; pick; drop; lock; open/close,Object Control; Gallery Navigation; AR Scroll List; Spatial Browser; Virtual Sorting; Target Selection; Object Placement; Object Inspection; Distance Measure; Assembly Assist; Info Panel; Precision Docking; Guided Tour
+swipe_left,navigate_previous,LEFT,move to previous item; scroll up; rotate left; nudge left; return hand,Gallery Navigation; AR Scroll List; Virtual Sorting; Object Inspection; Info Panel; Precision Docking; Guided Tour
+swipe_right,navigate_next,RIGHT,move to next item; scroll down; move item to bin; rotate right; nudge right,Gallery Navigation; AR Scroll List; Spatial Browser; Virtual Sorting; Object Placement; Object Inspection; Assembly Assist; Info Panel; Precision Docking; Guided Tour
+zoom_in,zoom_in,ZOOM+,increase scale; inspect details; magnify,Object Control; Spatial Browser; Object Placement; Object Inspection; Distance Measure; Guided Tour
+zoom_out,zoom_out,ZOOM-,decrease scale; fine scale; reset view,Object Control; Object Inspection; Precision Docking

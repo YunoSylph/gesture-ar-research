@@ -1,0 +1,43 @@
+[project]
+name = "hand-gestures-research"
+version = "0.1.0"
+description = "Windows-first research pipeline for temporal landmark hand gesture recognition."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+train = [
+  "scikit-learn>=1.4",
+  "torch>=2.4",
+  "torchvision>=0.19",
+  "torchaudio>=2.4",
+  "pandas>=3.0",
+  "matplotlib>=3.10",
+]
+vision = [
+  "opencv-python>=4.9",
+  "mediapipe>=0.10",
+  "gdown>=6.0",
+  "tqdm>=4.67",
+]
+export = [
+  "onnx>=1.16",
+  "onnxruntime-gpu>=1.20",
+  "onnxscript>=0.7",
+]
+serve = [
+  "fastapi>=0.136",
+  "uvicorn[standard]>=0.46",
+  "websockets>=16.0",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

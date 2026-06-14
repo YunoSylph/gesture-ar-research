@@ -1,0 +1,16 @@
+action_costs:
+  idle: 0.0
+  pointer_hover: 0.25
+  navigate_previous: 1.0
+  navigate_next: 1.0
+  zoom_in: 1.25
+  zoom_out: 1.25
+  select_confirm: 2.0
+
+notes:
+  pointer_hover: low-cost cursor movement
+  navigate_previous: medium-cost navigation or rotation
+  navigate_next: medium-cost navigation or rotation
+  zoom_in: higher-cost object transform
+  zoom_out: higher-cost object transform
+  select_confirm: highest-cost irreversible or committing action
