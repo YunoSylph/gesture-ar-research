@@ -32,7 +32,7 @@ This framing is more defensible because AR failures are not symmetric. A false `
 - The C4 method has a concrete methodological idea: classifier outputs are treated as action proposals, not direct commands.
 - The task-level benchmark is a meaningful upgrade because it evaluates scenario completion, unintended actions and false action cost.
 - `C4 task-aware` is the most thesis-ready concept: it combines recognition, risk-aware control and task context.
-- The web interface now demonstrates the research system and not only a standalone cube interaction.
+- The web interface now demonstrates the research system through camera-backed AR tasks, not a standalone placeholder object.
 
 ## Weak Components
 

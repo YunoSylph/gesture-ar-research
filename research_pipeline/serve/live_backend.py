@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 from research_pipeline.data.manifest import read_jsonl
 from research_pipeline.data.schema import resolve_path
 from research_pipeline.data.tensors import LandmarkTensor, load_landmark_npz
-from research_pipeline.features.preprocessing import clip_feature_summary, preprocess_dual_view
+from research_pipeline.features.preprocessing import clip_feature_summary, palm_scale, preprocess_dual_view
 from research_pipeline.interaction.action_safe import ActionSafePolicy, ActionSafePolicyConfig
 from research_pipeline.interaction.fsm import ACTION_BY_LABEL, ContextAwarePolicy, ContextPolicyConfig
 from research_pipeline.interaction.task_aware import TaskAwareActionSafePolicy, TaskAwarePolicyConfig, load_task_scenarios
@@ -77,14 +77,14 @@ DEFAULT_ACTION_SAFE_CONFIG = ActionSafePolicyConfig(
     min_score_margin=0.0,
 )
 DEFAULT_TARC_ACTION_CONFIG = ActionSafePolicyConfig(
-    default_threshold=0.62,
+    default_threshold=0.58,
     label_thresholds={
-        "point_2f": 0.54,
-        "click_2f": 0.78,
-        "swipe_left": 0.62,
-        "swipe_right": 0.62,
-        "zoom_in": 0.62,
-        "zoom_out": 0.62,
+        "point_2f": 0.48,
+        "click_2f": 0.84,
+        "swipe_left": 0.58,
+        "swipe_right": 0.58,
+        "zoom_in": 0.58,
+        "zoom_out": 0.58,
     },
     default_stable_frames=1,
     label_stable_frames={
@@ -96,13 +96,13 @@ DEFAULT_TARC_ACTION_CONFIG = ActionSafePolicyConfig(
     },
     cooldown_ms=420,
     no_gesture_reset_frames=3,
-    min_score_margin=0.04,
+    min_score_margin=0.06,
 )
 DEFAULT_TASK_AWARE_CONFIG = TaskAwarePolicyConfig(
     base=DEFAULT_TARC_ACTION_CONFIG,
-    expected_threshold_delta=-0.06,
-    unexpected_threshold_delta=0.16,
-    idle_threshold_delta=0.22,
+    expected_threshold_delta=-0.08,
+    unexpected_threshold_delta=0.20,
+    idle_threshold_delta=0.25,
     expected_stable_frames=2,
 )
 DEFAULT_C6_CALIBRATION_CONFIG = CalibratedFusionConfig(
@@ -331,6 +331,7 @@ def prediction_payload(
     log_path: str = "",
     task: str = "",
     policy_context: dict[str, Any] | None = None,
+    control_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     action = action_override or (event.action if event is not None else "idle")
     return {
@@ -356,6 +357,7 @@ def prediction_payload(
         "log_path": log_path,
         "task": task,
         "policy_context": policy_context,
+        "control_context": control_context,
     }
 
 
@@ -615,11 +617,15 @@ def policy_context(policy: ContextAwarePolicy | ActionSafePolicy | TaskAwareActi
 class LivePredictionStabilizer:
     """Smooth live webcam predictions and suppress accidental click dominance."""
 
-    def __init__(self, *, history_size: int = 6):
+    def __init__(self, *, history_size: int = 7):
         self.history: deque[Prediction] = deque(maxlen=history_size)
         self.stable_prediction: Prediction = prediction_from_scores({"no_gesture": 1.0})
+        self.frame_index = 0
+        self.last_click_frame = -1000
+        self.click_rearm_frames = 14
 
     def update(self, prediction: Prediction, tensor: LandmarkTensor) -> Prediction:
+        self.frame_index += 1
         sanitized = self._sanitize(prediction, tensor)
         self.history.append(sanitized)
         if sanitized.label == "no_gesture":
@@ -639,8 +645,12 @@ class LivePredictionStabilizer:
             return self._hold_or_idle()
 
         candidate_prediction = prediction_from_scores(weighted_scores)
-        if candidate == "click_2f" and (candidate_prediction.confidence < 0.62 or not self._click_geometry_ok(tensor)):
-            return self._hold_or_idle()
+        if candidate == "click_2f":
+            if self.frame_index - self.last_click_frame < self.click_rearm_frames:
+                return self._hold_or_idle()
+            if not self._click_candidate_ready(candidate_prediction, tensor, min_confidence=0.70, min_margin=0.12):
+                return self._hold_or_idle()
+            self.last_click_frame = self.frame_index
 
         self.stable_prediction = candidate_prediction
         return candidate_prediction
@@ -648,12 +658,28 @@ class LivePredictionStabilizer:
     def _sanitize(self, prediction: Prediction, tensor: LandmarkTensor) -> Prediction:
         if prediction.label != "click_2f":
             return prediction
-        if prediction.confidence < 0.58 or not self._click_geometry_ok(tensor):
-            scores = dict(prediction.scores)
-            scores["click_2f"] = min(scores.get("click_2f", 0.0), scores.get("no_gesture", 0.0) * 0.75)
-            scores["no_gesture"] = max(scores.get("no_gesture", 0.0), prediction.confidence + 0.02)
-            return prediction_from_scores(scores)
+        if not self._click_candidate_ready(prediction, tensor, min_confidence=0.72, min_margin=0.14):
+            return self._demote_click(prediction)
         return prediction
+
+    def _click_candidate_ready(
+        self,
+        prediction: Prediction,
+        tensor: LandmarkTensor,
+        *,
+        min_confidence: float,
+        min_margin: float,
+    ) -> bool:
+        return (
+            prediction.confidence >= min_confidence
+            and self._score_margin(prediction, "click_2f") >= min_margin
+            and self._click_geometry_ok(tensor)
+        )
+
+    def _score_margin(self, prediction: Prediction, label: str) -> float:
+        label_score = float(prediction.scores.get(label, 0.0))
+        runner_up = max((float(score) for name, score in prediction.scores.items() if name != label), default=0.0)
+        return label_score - runner_up
 
     def _click_geometry_ok(self, tensor: LandmarkTensor) -> bool:
         valid = tensor.sequence_mask.astype(bool)
@@ -662,12 +688,241 @@ class LivePredictionStabilizer:
             return False
         index_middle = np.linalg.norm(landmarks[:, 8, :2] - landmarks[:, 12, :2], axis=1)
         recent = index_middle[-min(6, index_middle.shape[0]) :]
-        return float(np.min(recent)) <= 0.065
+        wrist_to_middle = np.linalg.norm(landmarks[:, 0, :2] - landmarks[:, 9, :2], axis=1)
+        hand_scale = float(np.nanmedian(wrist_to_middle[-min(6, wrist_to_middle.shape[0]) :]))
+        absolute_close = float(np.min(recent)) <= 0.058
+        relative_close = hand_scale > 1e-6 and float(np.min(recent)) <= hand_scale * 0.58
+        return absolute_close or relative_close
+
+    def _demote_click(self, prediction: Prediction) -> Prediction:
+        scores = dict(prediction.scores)
+        click_score = float(scores.get("click_2f", 0.0))
+        scores["click_2f"] = min(click_score, 0.04)
+        scores["point_2f"] = max(float(scores.get("point_2f", 0.0)), click_score * 0.65)
+        scores["no_gesture"] = max(float(scores.get("no_gesture", 0.0)), click_score * 0.55)
+        return prediction_from_scores(scores)
 
     def _hold_or_idle(self) -> Prediction:
         if self.stable_prediction.label != "click_2f" and self.stable_prediction.confidence >= 0.45:
             return self.stable_prediction
         return prediction_from_scores({"no_gesture": 1.0})
+
+
+class LiveLandmarkGestureController:
+    """Stateful landmark-first controller for continuous webcam AR control.
+
+    The trained IPN recognizers classify pre-segmented gesture clips. A live AR
+    session is different: every camera frame is part of an ongoing control
+    stream. This controller therefore treats landmarks as the primary source for
+    pointer, click, swipe, and zoom events, while retaining the neural predictor
+    as a logged research signal.
+    """
+
+    def __init__(self, *, window_size: int = 14):
+        self.window_size = window_size
+        self.frame_index = 0
+        self.click_armed = False
+        self.candidate_label = ""
+        self.candidate_frames = 0
+        self.locked_label = ""
+        self.lock_until_frame = -1
+        self.last_context: dict[str, Any] = {
+            "mode": "idle",
+            "candidate_label": "",
+            "expected_label": "",
+            "progress": 0.0,
+            "stable_frames": 0,
+            "required_frames": 0,
+            "click_armed": False,
+        }
+        self.last_event_frame = {
+            "click_2f": -1000,
+            "swipe_left": -1000,
+            "swipe_right": -1000,
+            "zoom_in": -1000,
+            "zoom_out": -1000,
+        }
+
+    def update(self, model_prediction: Prediction, tensor: LandmarkTensor, *, expected_label: str | None = None) -> Prediction:
+        self.frame_index += 1
+        expected = expected_label if expected_label in TARGET_LABELS and expected_label != "no_gesture" else ""
+        if self.locked_label and self.frame_index <= self.lock_until_frame:
+            self.last_context = self._context("locked", self.locked_label, expected, 1.0, self._required_frames(self.locked_label))
+            return self._scores(self.locked_label, 0.92, model_prediction)
+        self.locked_label = ""
+
+        stats = self._stats(tensor)
+        if stats["valid_ratio"] < 0.42 or stats["valid_frames"] < 3 or stats["confidence"] < 0.35:
+            self.click_armed = False
+            self._reset_candidate()
+            self.last_context = self._context("no_hand", "", expected, 0.0, 0)
+            return self._scores("no_gesture", 0.96, model_prediction)
+
+        if stats["click_open_ratio_recent"] > 0.64:
+            self.click_armed = True
+
+        candidate = ""
+        progress = 0.0
+        if stats["samples"] >= 7:
+            if not expected or expected == "click_2f":
+                click_threshold = 0.46
+                click_progress = float(np.clip((0.64 - stats["click_close_ratio_min"]) / max(1e-6, 0.64 - click_threshold), 0.0, 1.0))
+                if self.click_armed and stats["click_close_ratio_min"] <= click_threshold and stats["motion"] < 0.09:
+                    candidate, progress = "click_2f", click_progress
+
+            swipe_threshold = max(0.16, stats["jitter"] * 3.8)
+            horizontal = abs(stats["dx"]) > swipe_threshold
+            mostly_horizontal = abs(stats["dx"]) > abs(stats["dy"]) * 1.35
+            if (not candidate) and mostly_horizontal:
+                label = "swipe_right" if stats["dx"] > 0 else "swipe_left"
+                if (not expected or expected == label) and horizontal:
+                    candidate = label
+                    progress = float(np.clip(abs(stats["dx"]) / swipe_threshold, 0.0, 1.0))
+
+            zoom_threshold = 0.20
+            zoom_motion = abs(stats["scale_delta_ratio"]) > zoom_threshold and abs(stats["scale_delta_ratio"]) > stats["scale_noise"] * 2.0
+            if (not candidate) and zoom_motion and stats["motion"] < 0.18:
+                label = "zoom_in" if stats["scale_delta_ratio"] > 0 else "zoom_out"
+                if not expected or expected == label:
+                    candidate = label
+                    progress = float(np.clip(abs(stats["scale_delta_ratio"]) / zoom_threshold, 0.0, 1.0))
+
+        if candidate:
+            if not self._ready(candidate, self._cooldown_frames(candidate)):
+                self._reset_candidate()
+                self.last_context = self._context("cooldown", candidate, expected, progress, self._required_frames(candidate))
+                return self._scores("point_2f", 0.80, model_prediction)
+            return self._track_candidate(candidate, progress, expected, model_prediction)
+
+        self._reset_candidate()
+        point_progress = 1.0 if not expected or expected == "point_2f" else 0.0
+        self.last_context = self._context("tracking", "point_2f", expected, point_progress, 1)
+        return self._scores("point_2f", 0.78, model_prediction)
+
+    def context(self) -> dict[str, Any]:
+        return dict(self.last_context)
+
+    def _ready(self, label: str, cooldown_frames: int) -> bool:
+        return self.frame_index - self.last_event_frame.get(label, -1000) >= cooldown_frames
+
+    def _track_candidate(self, label: str, progress: float, expected: str, model_prediction: Prediction) -> Prediction:
+        if label == self.candidate_label:
+            self.candidate_frames += 1
+        else:
+            self.candidate_label = label
+            self.candidate_frames = 1
+        required = self._required_frames(label)
+        frame_progress = min(1.0, self.candidate_frames / max(1, required))
+        lock_progress = max(float(progress), frame_progress)
+        if self.candidate_frames >= required:
+            self.locked_label = label
+            self.lock_until_frame = self.frame_index + self._hold_frames(label) - 1
+            self.last_event_frame[label] = self.frame_index
+            if label == "click_2f":
+                self.click_armed = False
+            self._reset_candidate()
+            self.last_context = self._context("locked", label, expected, 1.0, required)
+            return self._scores(label, 0.92, model_prediction)
+        self.last_context = self._context("preparing", label, expected, lock_progress, required)
+        return self._scores("point_2f", 0.80, model_prediction)
+
+    def _reset_candidate(self) -> None:
+        self.candidate_label = ""
+        self.candidate_frames = 0
+
+    def _required_frames(self, label: str) -> int:
+        return 2 if label in {"click_2f", "swipe_left", "swipe_right", "zoom_in", "zoom_out"} else 1
+
+    def _hold_frames(self, label: str) -> int:
+        return 5 if label == "click_2f" else 4
+
+    def _cooldown_frames(self, label: str) -> int:
+        return 20 if label == "click_2f" else 14
+
+    def _context(self, mode: str, candidate_label: str, expected_label: str, progress: float, required_frames: int) -> dict[str, Any]:
+        return {
+            "mode": mode,
+            "candidate_label": candidate_label,
+            "expected_label": expected_label,
+            "progress": round(float(np.clip(progress, 0.0, 1.0)), 3),
+            "stable_frames": int(self.candidate_frames),
+            "required_frames": int(required_frames),
+            "click_armed": bool(self.click_armed),
+        }
+
+    def _scores(self, label: str, confidence: float, model_prediction: Prediction) -> Prediction:
+        scores = {item: 0.012 for item in TARGET_LABELS}
+        scores[label] = confidence
+        # Keep a small trace of the model distribution for observability without
+        # letting segment-level guesses dominate live AR control.
+        for item, value in model_prediction.scores.items():
+            scores[item] = scores.get(item, 0.0) + float(value) * 0.035
+        if label != "no_gesture":
+            scores["no_gesture"] = max(scores["no_gesture"], 0.035)
+        return prediction_from_scores(scores)
+
+    def _stats(self, tensor: LandmarkTensor) -> dict[str, float]:
+        mask = tensor.sequence_mask.astype(bool)
+        landmarks = tensor.landmarks[mask] if mask.shape[0] == tensor.landmarks.shape[0] else tensor.landmarks
+        confidence = tensor.frame_confidence[mask] if mask.shape[0] == tensor.frame_confidence.shape[0] else tensor.frame_confidence
+        valid_frames = int(landmarks.shape[0])
+        valid_ratio = float(np.mean(mask)) if mask.size else 0.0
+        if valid_frames < 2:
+            return {
+                "valid_ratio": valid_ratio,
+                "valid_frames": valid_frames,
+                "confidence": float(np.mean(confidence)) if confidence.size else 0.0,
+                "samples": valid_frames,
+                "dx": 0.0,
+                "dy": 0.0,
+                "motion": 0.0,
+                "jitter": 0.0,
+                "scale_delta_ratio": 0.0,
+                "scale_noise": 1.0,
+                "click_close_ratio_min": 1.0,
+                "click_open_ratio_recent": 1.0,
+            }
+
+        recent = landmarks[-min(self.window_size, valid_frames) :]
+        samples = int(recent.shape[0])
+        index_tip = recent[:, 8, :2]
+        middle_tip = recent[:, 12, :2]
+        thumb_tip = recent[:, 4, :2]
+        wrist = recent[:, 0, :2]
+        centroid = recent[:, [0, 5, 9, 13, 17], :2].mean(axis=1)
+        scales = np.maximum(palm_scale(recent), 1e-6)
+        edge = max(2, min(4, samples // 3))
+        start_index = np.median(index_tip[:edge], axis=0)
+        end_index = np.median(index_tip[-edge:], axis=0)
+        dx = float(end_index[0] - start_index[0])
+        dy = float(end_index[1] - start_index[1])
+        motion = float(np.linalg.norm(np.median(centroid[-edge:], axis=0) - np.median(centroid[:edge], axis=0)))
+        diffs = np.diff(index_tip, axis=0)
+        jitter = float(np.median(np.linalg.norm(diffs, axis=1))) if diffs.size else 0.0
+        scale_start = float(np.median(scales[:edge]))
+        scale_end = float(np.median(scales[-edge:]))
+        scale_delta_ratio = (scale_end - scale_start) / max(scale_start, 1e-6)
+        scale_noise = float(np.std(scales) / max(float(np.mean(scales)), 1e-6))
+        index_middle_ratio = np.linalg.norm(index_tip - middle_tip, axis=1) / scales
+        thumb_index_ratio = np.linalg.norm(thumb_tip - index_tip, axis=1) / scales
+        click_close_ratio = np.minimum(index_middle_ratio, thumb_index_ratio)
+        click_open_ratio = np.minimum(index_middle_ratio, thumb_index_ratio)
+        # Wrist motion helps avoid interpreting a whole-hand translation as a click.
+        wrist_motion = float(np.linalg.norm(np.median(wrist[-edge:], axis=0) - np.median(wrist[:edge], axis=0)))
+        return {
+            "valid_ratio": valid_ratio,
+            "valid_frames": valid_frames,
+            "confidence": float(np.mean(confidence)) if confidence.size else 1.0,
+            "samples": samples,
+            "dx": dx,
+            "dy": dy,
+            "motion": max(motion, wrist_motion),
+            "jitter": jitter,
+            "scale_delta_ratio": float(scale_delta_ratio),
+            "scale_noise": scale_noise,
+            "click_close_ratio_min": float(np.min(click_close_ratio)),
+            "click_open_ratio_recent": float(np.median(click_open_ratio[-edge:])),
+        }
 
 
 def pointer_from_landmarks(landmarks: np.ndarray, valid: bool) -> dict[str, float] | None:
@@ -778,7 +1033,7 @@ async def stream_webcam(
         return
 
     window: deque[tuple[np.ndarray, bool, float]] = deque(maxlen=32)
-    stabilizer = LivePredictionStabilizer()
+    live_controller = LiveLandmarkGestureController()
     start = time.perf_counter()
     frame_times: deque[float] = deque(maxlen=30)
     await websocket.send_json({"type": "status", "message": "streaming camera"})
@@ -794,7 +1049,10 @@ async def stream_webcam(
             landmarks, valid, confidence = landmarker.detect(frame)
             window.append((landmarks, valid, confidence))
             tensor = tensor_from_window(window)
-            prediction = stabilizer.update(predictor.predict(tensor), tensor)
+            model_prediction = predictor.predict(tensor)
+            current_policy_context = policy_context(policy)
+            expected_label = str(current_policy_context.get("expected_label", "")) if current_policy_context else ""
+            prediction = live_controller.update(model_prediction, tensor, expected_label=expected_label)
             timestamp_ms = int((time.perf_counter() - start) * 1000)
             event = None if policy is None else policy_event(policy, prediction, timestamp_ms)
             action_override = direct_action_for_prediction(prediction) if interaction_mode == "direct" else None
@@ -817,6 +1075,7 @@ async def stream_webcam(
                 log_path=logger.public_path,
                 task=task,
                 policy_context=policy_context(policy),
+                control_context=live_controller.context(),
             )
             logger.write(
                 payload,
@@ -827,6 +1086,8 @@ async def stream_webcam(
                     "capture_fps": capture_fps,
                     "preview_width": preview_width,
                     "jpeg_quality": jpeg_quality,
+                    "model_gesture": model_prediction.label,
+                    "model_confidence": model_prediction.confidence,
                 },
             )
             await websocket.send_json(payload)

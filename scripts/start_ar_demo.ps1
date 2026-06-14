@@ -11,6 +11,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
 $AppDir = Join-Path $Root "demo\ar_interaction_app"
 $Python = Join-Path $Root ".venv311\Scripts\python.exe"
+$Requirements = Join-Path $Root "requirements\live.txt"
 $LogDir = Join-Path $Root "artifacts\logs"
 
 New-Item -ItemType Directory -Force $LogDir | Out-Null
@@ -47,7 +48,26 @@ function Wait-Http {
 }
 
 if (-not (Test-Path $Python)) {
-  throw "Python environment not found: $Python"
+  $systemPython = Get-Command py -ErrorAction SilentlyContinue
+  if ($systemPython) {
+    & py -3.11 -m venv (Join-Path $Root ".venv311")
+  }
+  if (-not (Test-Path $Python)) {
+    $systemPython = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $systemPython) {
+      throw "Python 3.11+ was not found. Install Python and rerun this script."
+    }
+    & python -m venv (Join-Path $Root ".venv311")
+  }
+}
+
+if (-not (Test-Path $Python)) {
+  throw "Python environment could not be created: $Python"
+}
+
+if (Test-Path $Requirements) {
+  & $Python -m pip install --upgrade pip
+  & $Python -m pip install -r $Requirements
 }
 
 if (-not (Test-Path $AppDir)) {

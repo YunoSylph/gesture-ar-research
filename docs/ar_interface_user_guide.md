@@ -3,7 +3,7 @@
 ## Запуск
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project"
+cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research"
 powershell -ExecutionPolicy Bypass -File .\scripts\start_ar_demo.ps1 -Restart
 ```
 
@@ -26,10 +26,9 @@ http://127.0.0.1:5173
 
 | Задача | Смысл |
 |---|---|
-| `Object: select and scale` | Навести курсор на компактный куб, коротко подтвердить выбор, увеличить и уменьшить объект. |
-| `List: scroll and open` | Скроллить плавающий список и открыть выделенную строку. |
-| `Cards: browse and inspect` | Перелистывать AR-карточки, открыть карточку и приблизить её. |
-| `Sorting: move item` | Взять виртуальный предмет, перенести его в контейнер и сбросить. |
+| `1. Object control` | Навести курсор на AR-модуль, коротко подтвердить выбор, приблизить и отвести руку назад для масштаба. |
+| `2. Scroll and open` | Горизонтальными swipe right/left пройти по плавающему списку и открыть выделенную строку. |
+| `3. Sort virtual item` | Взять виртуальный предмет, перенести его в правый контейнер и сбросить. |
 
 Полная библиотека исследовательских сценариев всё ещё используется в benchmark-отчётах, но больше не перегружает live-экран.
 
@@ -52,12 +51,14 @@ data/interaction_gesture_examples
 
 Короткая привязка "жест -> задача -> эффект" вынесена отдельно в `data/interaction_gesture_examples/TASK_INTERACTIONS.md`.
 
-В интерфейсе также есть вкладка `Guide`: она показывает визуальную карточку каждого жеста, его название, эффект в AR и короткую подсказку по выполнению. Для `click_2f` важно делать короткое сближение пальцев и сразу возвращаться в `point_2f` или idle, иначе live-система может воспринимать это как повторное подтверждение.
+В интерфейсе также есть вкладка `Guide`: она показывает визуальную карточку каждого жеста, его название, эффект в AR и короткую подсказку по выполнению. Для `click_2f` важно делать открытая рука -> короткий pinch index-to-thumb -> снова открыть руку; live-controller не принимает удерживаемый click как повторные нажатия.
+
+В правом overlay есть lock bar. Команда считается принятой не в момент первого случайного совпадения landmarks, а после короткой фиксации: `preparing -> locked -> cooldown`.
 
 ### Что делают новые сценарии
 
+- `Object Control`: `point_2f` наводит курсор, короткий `click_2f` выбирает AR-модуль, `zoom_in` и `zoom_out` меняют размер.
 - `AR Scroll List`: `swipe_right` ведёт список вниз, `swipe_left` возвращает вверх, `click_2f` открывает текущую строку.
-- `Spatial Browser`: `point_2f` наводит курсор на карточку, `swipe_right` перелистывает карточки, `click_2f` открывает центральную карточку, `zoom_in` приближает её.
 - `Virtual Sorting`: `point_2f` наводит курсор на предмет, первый `click_2f` берёт предмет, `swipe_right` переносит его к правому контейнеру, второй `click_2f` сбрасывает предмет.
 
 ## Панель интерфейса
@@ -68,19 +69,19 @@ data/interaction_gesture_examples
 - `Start Task`: запуск распознавания с вебкамеры и проверки сценария.
 - `Stop Live`: остановка live-потока.
 - `Reset Task`: сброс прогресса выбранной задачи.
-- `Live Status`: backend, stream FPS, capture FPS, processing time, frame age, detection, camera resolution и текущий жест.
+- `Telemetry`: backend, stream FPS, processing time, detection, camera resolution и текущий жест.
 - `Guide`: визуальная памятка по жестам.
-- `Advanced Controls`: ручной выбор модели, dataset replay, direct/TARC mode, camera index, FPS, JPEG quality и тестовые кнопки жестов.
+- `Advanced Controls`: camera index, FPS, JPEG quality и тестовые кнопки жестов. Выбор модели и `TARC/Direct` находится на основной панели, потому что это ключевой режим эксперимента.
 
 ## Рекомендуемые настройки скорости
 
 По умолчанию интерфейс использует рабочий live-режим:
 
 ```text
-camera: 1280x720
+camera: 1920x1080
 target fps: 30
-preview: 960 px
-jpeg: 84
+preview: 1280 px
+jpeg: 88
 method: Robust C6
 mode: TARC
 ```
@@ -94,10 +95,8 @@ mode: TARC
 
 ### Как понять, что live-поток нормальный
 
-- `Capture` должен быть близок к `25-30` FPS.
 - `FPS` должен быть близок к выбранному `Target FPS`.
 - `Proc` должен обычно оставаться ниже `25-35 ms`.
-- `Age` должен быть десятки миллисекунд, а не сотни.
 - `Detect` около `0.00` при закрытой шторке камеры является нормальным: backend получает кадры, но MediaPipe не видит руку.
 - Зеленые точки показывают landmarks, а круг `AR cursor` показывает fingertip pointer поверх камеры.
 

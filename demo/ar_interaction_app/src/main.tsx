@@ -24,23 +24,10 @@ import {
 import * as THREE from "three";
 import "./styles.css";
 
-type PageId = "demo" | "guide" | "results" | "charts";
+type PageId = "demo" | "guide" | "results";
 type MethodId = "c1t_tcn" | "c6_ensemble";
 type SourceId = "replay" | "webcam";
-type TaskId =
-  | "object"
-  | "carousel"
-  | "scroll"
-  | "browser"
-  | "transfer"
-  | "targets"
-  | "placement"
-  | "inspection"
-  | "measurement"
-  | "assembly"
-  | "info"
-  | "docking"
-  | "tour";
+type TaskId = "object" | "scroll" | "transfer";
 type InteractionMode = "direct" | "c4_task_aware";
 type BackendHealth = "checking" | "ready" | "offline";
 type GestureId =
@@ -65,18 +52,13 @@ type SceneState = {
   rotationY: number;
   scale: number;
   selected: boolean;
-  anchored: boolean;
   pointerX: number;
   pointerY: number;
   action: ActionId;
-  carouselIndex: number;
-  targetIndex: number;
   scrollIndex: number;
-  browserIndex: number;
   transferIndex: number;
   transferHeld: boolean;
   hits: number;
-  inspectionPanel: number;
 };
 
 type TaskStep = {
@@ -138,9 +120,19 @@ type StreamMessage = {
     expected_id?: string;
     false_events?: number;
   } | null;
+  control_context?: {
+    mode?: string;
+    candidate_label?: GestureId | "";
+    expected_label?: GestureId | "";
+    progress?: number;
+    stable_frames?: number;
+    required_frames?: number;
+    click_armed?: boolean;
+  } | null;
 };
 
 type PolicyContext = NonNullable<StreamMessage["policy_context"]>;
+type ControlContext = NonNullable<StreamMessage["control_context"]>;
 
 type CameraStats = {
   running?: boolean;
@@ -158,13 +150,13 @@ type CameraStats = {
 
 const BACKEND_HTTP_URL = "http://127.0.0.1:8000";
 const BACKEND_WS_URL = "ws://127.0.0.1:8000";
-const FAST_CAMERA_WIDTH = 1280;
-const FAST_CAMERA_HEIGHT = 720;
+const FAST_CAMERA_WIDTH = 1920;
+const FAST_CAMERA_HEIGHT = 1080;
 const DEFAULT_TARGET_FPS = 30;
 const DEFAULT_INTERVAL_MS = Math.round(1000 / DEFAULT_TARGET_FPS);
-const DEFAULT_PREVIEW_WIDTH = 960;
-const DEFAULT_JPEG_QUALITY = 84;
-const POINTER_SMOOTHING = 0.34;
+const DEFAULT_PREVIEW_WIDTH = 1280;
+const DEFAULT_JPEG_QUALITY = 88;
+const POINTER_SMOOTHING = 0.22;
 
 const methods: Array<{
   id: MethodId;
@@ -198,159 +190,39 @@ const methods: Array<{
 const tasks: TaskDefinition[] = [
   {
     id: "object",
-    label: "Object: select and scale",
-    description: "Point at the cube, confirm once, then change its size.",
+    label: "1. Object control",
+    description: "Use the hand cursor to focus the AR module, confirm it, then scale it.",
     steps: [
-      { id: "object_hover", action: "pointer_hover", gesture: "point_2f", label: "Point at cube" },
-      { id: "object_select", action: "select_confirm", gesture: "click_2f", label: "Short click" },
-      { id: "object_zoom_in", action: "zoom_in", gesture: "zoom_in", label: "Make bigger" },
-      { id: "object_zoom_out", action: "zoom_out", gesture: "zoom_out", label: "Make smaller" }
-    ]
-  },
-  {
-    id: "carousel",
-    label: "Gallery Navigation",
-    description: "Move through virtual items and confirm selection.",
-    steps: [
-      { id: "carousel_next_1", action: "navigate_next", gesture: "swipe_right", label: "Next" },
-      { id: "carousel_next_2", action: "navigate_next", gesture: "swipe_right", label: "Next" },
-      { id: "carousel_previous", action: "navigate_previous", gesture: "swipe_left", label: "Previous" },
-      { id: "carousel_select", action: "select_confirm", gesture: "click_2f", label: "Confirm" }
+      { id: "object_hover", action: "pointer_hover", gesture: "point_2f", label: "Point at AR module" },
+      { id: "object_select", action: "select_confirm", gesture: "click_2f", label: "Short click once" },
+      { id: "object_zoom_in", action: "zoom_in", gesture: "zoom_in", label: "Move hand closer" },
+      { id: "object_zoom_out", action: "zoom_out", gesture: "zoom_out", label: "Move hand back" }
     ]
   },
   {
     id: "scroll",
-    label: "List: scroll and open",
-    description: "Swipe through a floating list, then open the highlighted row.",
+    label: "2. Scroll and open",
+    description: "Move through the AR list with clear horizontal swipes, then open one row.",
     steps: [
-      { id: "scroll_next_1", action: "navigate_next", gesture: "swipe_right", label: "Scroll down" },
-      { id: "scroll_next_2", action: "navigate_next", gesture: "swipe_right", label: "Scroll down again" },
-      { id: "scroll_previous", action: "navigate_previous", gesture: "swipe_left", label: "Scroll up" },
-      { id: "scroll_select", action: "select_confirm", gesture: "click_2f", label: "Short click row" }
-    ]
-  },
-  {
-    id: "browser",
-    label: "Cards: browse and inspect",
-    description: "Point at the card carousel, move to the next cards, then inspect one.",
-    steps: [
-      { id: "browser_point", action: "pointer_hover", gesture: "point_2f", label: "Point at cards" },
-      { id: "browser_next_1", action: "navigate_next", gesture: "swipe_right", label: "Next card" },
-      { id: "browser_next_2", action: "navigate_next", gesture: "swipe_right", label: "Next card again" },
-      { id: "browser_open", action: "select_confirm", gesture: "click_2f", label: "Short click open" },
-      { id: "browser_zoom", action: "zoom_in", gesture: "zoom_in", label: "Zoom to inspect" }
+      { id: "scroll_next_1", action: "navigate_next", gesture: "swipe_right", label: "Swipe right to next row" },
+      { id: "scroll_previous", action: "navigate_previous", gesture: "swipe_left", label: "Swipe left to previous row" },
+      { id: "scroll_select", action: "select_confirm", gesture: "click_2f", label: "Short click to open" }
     ]
   },
   {
     id: "transfer",
-    label: "Sorting: move item",
-    description: "Pick one virtual item, move it to the right bin, and drop it.",
+    label: "3. Sort virtual item",
+    description: "Pick the active item, move it to the right bin, and drop it.",
     steps: [
-      { id: "transfer_point", action: "pointer_hover", gesture: "point_2f", label: "Point at item" },
-      { id: "transfer_pick", action: "select_confirm", gesture: "click_2f", label: "Short click pick" },
-      { id: "transfer_move", action: "navigate_next", gesture: "swipe_right", label: "Move to right bin" },
-      { id: "transfer_drop", action: "select_confirm", gesture: "click_2f", label: "Short click drop" },
-      { id: "transfer_return", action: "navigate_previous", gesture: "swipe_left", label: "Return left" }
-    ]
-  },
-  {
-    id: "targets",
-    label: "Target Selection",
-    description: "Hover and confirm targets in an AR scene.",
-    steps: [
-      { id: "target_hover_1", action: "pointer_hover", gesture: "point_2f", label: "Hover A" },
-      { id: "target_confirm_1", action: "select_confirm", gesture: "click_2f", label: "Confirm A" },
-      { id: "target_hover_2", action: "pointer_hover", gesture: "point_2f", label: "Hover B" },
-      { id: "target_confirm_2", action: "select_confirm", gesture: "click_2f", label: "Confirm B" }
-    ]
-  },
-  {
-    id: "placement",
-    label: "Object Placement",
-    description: "Place an object on a detected surface and adjust its size.",
-    steps: [
-      { id: "place_aim", action: "pointer_hover", gesture: "point_2f", label: "Aim" },
-      { id: "place_anchor", action: "select_confirm", gesture: "click_2f", label: "Anchor" },
-      { id: "place_zoom", action: "zoom_in", gesture: "zoom_in", label: "Fit" },
-      { id: "place_rotate", action: "navigate_next", gesture: "swipe_right", label: "Orient" }
-    ]
-  },
-  {
-    id: "inspection",
-    label: "Object Inspection",
-    description: "Select, rotate, inspect detail states, and return scale.",
-    steps: [
-      { id: "inspect_select", action: "select_confirm", gesture: "click_2f", label: "Select" },
-      { id: "inspect_rotate_next", action: "navigate_next", gesture: "swipe_right", label: "Rotate" },
-      { id: "inspect_zoom", action: "zoom_in", gesture: "zoom_in", label: "Inspect" },
-      { id: "inspect_rotate_back", action: "navigate_previous", gesture: "swipe_left", label: "Back" },
-      { id: "inspect_zoom_out", action: "zoom_out", gesture: "zoom_out", label: "Reset" }
-    ]
-  },
-  {
-    id: "measurement",
-    label: "Distance Measure",
-    description: "Mark two AR points and magnify the measured segment.",
-    steps: [
-      { id: "measure_aim_a", action: "pointer_hover", gesture: "point_2f", label: "Aim A" },
-      { id: "measure_pin_a", action: "select_confirm", gesture: "click_2f", label: "Pin A" },
-      { id: "measure_aim_b", action: "pointer_hover", gesture: "point_2f", label: "Aim B" },
-      { id: "measure_pin_b", action: "select_confirm", gesture: "click_2f", label: "Pin B" },
-      { id: "measure_zoom", action: "zoom_in", gesture: "zoom_in", label: "Magnify" }
-    ]
-  },
-  {
-    id: "assembly",
-    label: "Assembly Assist",
-    description: "Pick a virtual part, move to the next slot, and lock it.",
-    steps: [
-      { id: "assembly_point_part", action: "pointer_hover", gesture: "point_2f", label: "Point Part" },
-      { id: "assembly_pick", action: "select_confirm", gesture: "click_2f", label: "Pick" },
-      { id: "assembly_next_slot", action: "navigate_next", gesture: "swipe_right", label: "Next Slot" },
-      { id: "assembly_align", action: "pointer_hover", gesture: "point_2f", label: "Align" },
-      { id: "assembly_lock", action: "select_confirm", gesture: "click_2f", label: "Lock" }
-    ]
-  },
-  {
-    id: "info",
-    label: "Info Panel",
-    description: "Open an object card and browse AR metadata panels.",
-    steps: [
-      { id: "info_point", action: "pointer_hover", gesture: "point_2f", label: "Point" },
-      { id: "info_open", action: "select_confirm", gesture: "click_2f", label: "Open" },
-      { id: "info_next", action: "navigate_next", gesture: "swipe_right", label: "Next Card" },
-      { id: "info_prev", action: "navigate_previous", gesture: "swipe_left", label: "Previous" },
-      { id: "info_close", action: "select_confirm", gesture: "click_2f", label: "Close" }
-    ]
-  },
-  {
-    id: "docking",
-    label: "Precision Docking",
-    description: "Align the AR object with a target reticle and dock it.",
-    steps: [
-      { id: "dock_pointer", action: "pointer_hover", gesture: "point_2f", label: "Acquire" },
-      { id: "dock_left", action: "navigate_previous", gesture: "swipe_left", label: "Nudge Left" },
-      { id: "dock_right", action: "navigate_next", gesture: "swipe_right", label: "Nudge Right" },
-      { id: "dock_zoom", action: "zoom_out", gesture: "zoom_out", label: "Fine Scale" },
-      { id: "dock_confirm", action: "select_confirm", gesture: "click_2f", label: "Dock" }
-    ]
-  },
-  {
-    id: "tour",
-    label: "Guided Tour",
-    description: "Navigate scene waypoints, focus one item, then return.",
-    steps: [
-      { id: "tour_next_1", action: "navigate_next", gesture: "swipe_right", label: "Waypoint 1" },
-      { id: "tour_select", action: "select_confirm", gesture: "click_2f", label: "Focus" },
-      { id: "tour_zoom", action: "zoom_in", gesture: "zoom_in", label: "Zoom" },
-      { id: "tour_next_2", action: "navigate_next", gesture: "swipe_right", label: "Waypoint 2" },
-      { id: "tour_back", action: "navigate_previous", gesture: "swipe_left", label: "Return" }
+      { id: "transfer_point", action: "pointer_hover", gesture: "point_2f", label: "Point at highlighted item" },
+      { id: "transfer_pick", action: "select_confirm", gesture: "click_2f", label: "Short click to pick" },
+      { id: "transfer_move", action: "navigate_next", gesture: "swipe_right", label: "Swipe right to target bin" },
+      { id: "transfer_drop", action: "select_confirm", gesture: "click_2f", label: "Short click to drop" }
     ]
   }
 ];
 
-const liveTaskIds: TaskId[] = ["object", "scroll", "browser", "transfer"];
-const liveTasks = tasks.filter((item) => liveTaskIds.includes(item.id));
+const liveTasks = tasks;
 
 const actionLabels: Record<ActionId, string> = {
   idle: "Idle",
@@ -433,25 +305,10 @@ const recognitionChartRows = [
   { method: "M2 Robust C6", accuracy: 0.93, macroF1: 0.887 }
 ];
 
-const c4RiskChartRows = [
-  { method: "M1 Baseline Direct", precision: 0.892, recall: 0.86, unintended: 0.106, falseCost: 0.11 },
-  { method: "M2 Robust Direct", precision: 0.917, recall: 0.866, unintended: 0.081, falseCost: 0.085 },
-  { method: "M3 Proposed TARC", precision: 0.974, recall: 0.857, unintended: 0.024, falseCost: 0.025 }
-];
-
 const c4TaskChartRows = [
   { method: "M1 Baseline Direct", success: 0.527, precision: 0.892, recall: 0.86, unintended: 0.106, falseCost: 0.11 },
   { method: "M2 Robust Direct", success: 0.552, precision: 0.917, recall: 0.866, unintended: 0.081, falseCost: 0.085 },
   { method: "M3 Proposed TARC", success: 0.531, precision: 0.974, recall: 0.857, unintended: 0.024, falseCost: 0.025 }
-];
-
-const weakTaskRows = [
-  { task: "inspection", success: 0.175, recall: 0.755, falseCost: 0.035, missedCost: 0.264 },
-  { task: "info", success: 0.3, recall: 0.825, falseCost: 0.08, missedCost: 0.202 },
-  { task: "transfer", success: 0.3, recall: 0.795, falseCost: 0.037, missedCost: 0.248 },
-  { task: "tour", success: 0.3, recall: 0.82, falseCost: 0.033, missedCost: 0.179 },
-  { task: "docking", success: 0.35, recall: 0.825, falseCost: 0.042, missedCost: 0.191 },
-  { task: "assembly", success: 0.375, recall: 0.825, falseCost: 0.06, missedCost: 0.217 }
 ];
 
 const gestureActions: Record<GestureId, ActionId> = {
@@ -497,61 +354,88 @@ const gestureGuideCards: Array<{
     id: "click_2f",
     label: "Click",
     action: "Confirm",
-    pose: "Briefly bring index and middle fingers close.",
-    cue: "Do not hold this gesture; release back to Point.",
+    pose: "Briefly pinch index to thumb, then open again.",
+    cue: "Open hand first; one short pinch is one click.",
     icon: Crosshair
   },
   {
     id: "swipe_left",
     label: "Swipe Left",
     action: "Previous",
-    pose: "Move the visible hand horizontally left.",
-    cue: "Use one clean motion, then pause.",
+    pose: "Move the whole visible hand horizontally left.",
+    cue: "Make one clean side motion until the lock bar fills.",
     icon: ChevronLeft
   },
   {
     id: "swipe_right",
     label: "Swipe Right",
     action: "Next",
-    pose: "Move the visible hand horizontally right.",
-    cue: "Keep the motion wider than a small tremor.",
+    pose: "Move the whole visible hand horizontally right.",
+    cue: "Make one clean side motion until the lock bar fills.",
     icon: ChevronRight
   },
   {
     id: "zoom_in",
     label: "Zoom In",
     action: "Scale up",
-    pose: "Open the finger distance during the gesture.",
-    cue: "Start small, then open clearly.",
+    pose: "Move the hand closer so it grows in frame.",
+    cue: "Avoid side movement while changing distance.",
     icon: ZoomIn
   },
   {
     id: "zoom_out",
     label: "Zoom Out",
     action: "Scale down",
-    pose: "Close the finger distance during the gesture.",
-    cue: "Start open, then close clearly.",
+    pose: "Move the hand back so it shrinks in frame.",
+    cue: "Avoid side movement while changing distance.",
     icon: ZoomOut
   }
 ];
 
+function gestureDisplayName(gesture: GestureId): string {
+  return gestureGuideCards.find((item) => item.id === gesture)?.label ?? gesture.replace("_", " ");
+}
+
+function GesturePoseVisual({ gesture, compact = false }: { gesture: GestureId; compact?: boolean }) {
+  return (
+    <div className={`gesture-pose ${gesture} ${compact ? "compact" : ""}`} aria-label={`${gestureDisplayName(gesture)} gesture visual`}>
+      <span className="pose-orbit" />
+      <span className="pose-arrow" />
+      <span className="pose-hand ghost" aria-hidden="true">
+        <i className="finger thumb" />
+        <i className="finger index" />
+        <i className="finger middle" />
+        <i className="finger ring" />
+        <i className="finger pinky" />
+        <i className="palm" />
+        <i className="wrist" />
+      </span>
+      <span className="pose-hand" aria-hidden="true">
+        <i className="finger thumb" />
+        <i className="finger index" />
+        <i className="finger middle" />
+        <i className="finger ring" />
+        <i className="finger pinky" />
+        <i className="palm" />
+        <i className="wrist" />
+      </span>
+      <span className="pose-touch" />
+    </div>
+  );
+}
+
 function initialSceneState(): SceneState {
   return {
     rotationY: 0,
-    scale: 0.68,
+    scale: 0.5,
     selected: false,
-    anchored: false,
     pointerX: 0,
     pointerY: 0,
     action: "idle",
-    carouselIndex: 0,
-    targetIndex: 0,
     scrollIndex: 0,
-    browserIndex: 0,
     transferIndex: 0,
     transferHeld: false,
-    hits: 0,
-    inspectionPanel: 0
+    hits: 0
   };
 }
 
@@ -573,12 +457,8 @@ function applyAction(state: SceneState, action: ActionId, task: TaskId): SceneSt
     return {
       ...state,
       rotationY: state.rotationY - Math.PI / 5,
-      carouselIndex: Math.max(0, state.carouselIndex - 1),
-      targetIndex: Math.max(0, state.targetIndex - 1),
       scrollIndex: Math.max(0, state.scrollIndex - 1),
-      browserIndex: Math.max(0, state.browserIndex - 1),
       transferIndex: Math.max(0, state.transferIndex - 1),
-      inspectionPanel: Math.max(0, state.inspectionPanel - 1),
       action
     };
   }
@@ -586,41 +466,23 @@ function applyAction(state: SceneState, action: ActionId, task: TaskId): SceneSt
     return {
       ...state,
       rotationY: state.rotationY + Math.PI / 5,
-      carouselIndex: Math.min(4, state.carouselIndex + 1),
-      targetIndex: Math.min(4, state.targetIndex + 1),
       scrollIndex: Math.min(5, state.scrollIndex + 1),
-      browserIndex: Math.min(4, state.browserIndex + 1),
       transferIndex: Math.min(3, state.transferIndex + 1),
-      inspectionPanel: Math.min(3, state.inspectionPanel + 1),
       action
     };
   }
   if (action === "zoom_in") {
-    return { ...state, scale: Math.min(1.36, state.scale + 0.1), action };
+    return { ...state, scale: Math.min(1.05, state.scale + 0.08), action };
   }
   if (action === "zoom_out") {
-    return { ...state, scale: Math.max(0.52, state.scale - 0.1), action };
+    return { ...state, scale: Math.max(0.42, state.scale - 0.08), action };
   }
   if (action === "select_confirm") {
-    const latchSelectionTasks: TaskId[] = ["targets", "measurement", "docking", "scroll", "browser"];
-    const hitTasks: TaskId[] = [
-      "targets",
-      "placement",
-      "measurement",
-      "assembly",
-      "info",
-      "docking",
-      "tour",
-      "scroll",
-      "browser",
-      "transfer"
-    ];
     return {
       ...state,
-      selected: latchSelectionTasks.includes(task) ? true : !state.selected,
-      anchored: task === "placement" || task === "docking" ? true : state.anchored,
+      selected: task === "scroll" ? true : task === "object" ? !state.selected : state.selected,
       transferHeld: task === "transfer" ? !state.transferHeld : state.transferHeld,
-      hits: hitTasks.includes(task) ? state.hits + 1 : state.hits,
+      hits: task === "transfer" ? state.hits + 1 : state.hits,
       action
     };
   }
@@ -645,7 +507,7 @@ function advanceTaskRun(current: TaskRunState, taskDefinition: TaskDefinition, a
   }
 
   const now = Date.now();
-  if (now - current.lastEvaluatedAt < 420) {
+  if (now - current.lastEvaluatedAt < 720) {
     return current;
   }
 
@@ -674,11 +536,8 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const objectRef = useRef<THREE.Group | null>(null);
   const pointerRef = useRef<THREE.Mesh | null>(null);
-  const targetGroupRef = useRef<THREE.Group | null>(null);
   const scrollGroupRef = useRef<THREE.Group | null>(null);
-  const browserGroupRef = useRef<THREE.Group | null>(null);
   const transferGroupRef = useRef<THREE.Group | null>(null);
-  const anchorRef = useRef<THREE.Mesh | null>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial | null>(null);
   const stateRef = useRef(state);
   const taskRef = useRef(task);
@@ -714,6 +573,20 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
     grid.position.y = -1.35;
     scene.add(grid);
 
+    const arBackplate = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.2, 1.82),
+      new THREE.MeshStandardMaterial({
+        color: 0x12222a,
+        roughness: 0.52,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.24,
+        side: THREE.DoubleSide
+      })
+    );
+    arBackplate.position.set(0, 0.14, -0.08);
+    scene.add(arBackplate);
+
     const group = new THREE.Group();
     group.position.y = 0.48;
     const material = new THREE.MeshStandardMaterial({
@@ -724,27 +597,48 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
       emissiveIntensity: 0.35
     });
     materialRef.current = material;
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), material);
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 2), material);
+    const shell = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.5, 1),
+      new THREE.MeshStandardMaterial({
+        color: 0xb8fff8,
+        roughness: 0.18,
+        metalness: 0.2,
+        transparent: true,
+        opacity: 0.16,
+        wireframe: true
+      })
+    );
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.86, 0.019, 16, 96),
+      new THREE.TorusGeometry(0.58, 0.014, 16, 112),
       new THREE.MeshStandardMaterial({ color: 0xf2cc60, roughness: 0.4, metalness: 0.1 })
     );
     ring.rotation.x = Math.PI / 2;
-    group.add(cube, ring);
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.62, 0.76, 0.055, 72),
+      new THREE.MeshStandardMaterial({
+        color: 0x1b2b34,
+        roughness: 0.34,
+        metalness: 0.24,
+        transparent: true,
+        opacity: 0.88
+      })
+    );
+    base.position.y = -0.52;
+    const scanLine = new THREE.Mesh(
+      new THREE.BoxGeometry(1.12, 0.025, 0.035),
+      new THREE.MeshStandardMaterial({
+        color: 0x9cf18b,
+        emissive: 0x163a12,
+        emissiveIntensity: 0.9,
+        roughness: 0.35,
+        metalness: 0.08
+      })
+    );
+    scanLine.position.y = -0.18;
+    group.add(core, shell, ring, base, scanLine);
     scene.add(group);
     objectRef.current = group;
-
-    const targetGroup = new THREE.Group();
-    for (let index = 0; index < 5; index += 1) {
-      const target = new THREE.Mesh(
-        new THREE.SphereGeometry(0.1, 24, 24),
-        new THREE.MeshStandardMaterial({ color: 0xd7b95c, roughness: 0.35, metalness: 0.2 })
-      );
-      target.position.set((index - 2) * 0.58, -0.58, 1.2);
-      targetGroup.add(target);
-    }
-    scene.add(targetGroup);
-    targetGroupRef.current = targetGroup;
 
     const scrollGroup = new THREE.Group();
     scrollGroup.position.set(-0.05, 0.08, 0.42);
@@ -778,37 +672,6 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
     scene.add(scrollGroup);
     scrollGroupRef.current = scrollGroup;
 
-    const browserGroup = new THREE.Group();
-    browserGroup.position.set(0, 0.22, 0.18);
-    for (let index = 0; index < 5; index += 1) {
-      const card = new THREE.Group();
-      const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(0.92, 1.08, 0.045),
-        new THREE.MeshStandardMaterial({
-          color: [0x263e4d, 0x31432e, 0x3f344e, 0x4a3f2d, 0x2f4542][index],
-          roughness: 0.42,
-          metalness: 0.08,
-          transparent: true,
-          opacity: 0.92
-        })
-      );
-      const header = new THREE.Mesh(
-        new THREE.BoxGeometry(0.72, 0.09, 0.052),
-        new THREE.MeshStandardMaterial({ color: 0xf2cc60, roughness: 0.35, metalness: 0.08 })
-      );
-      const thumb = new THREE.Mesh(
-        new THREE.BoxGeometry(0.44, 0.36, 0.056),
-        new THREE.MeshStandardMaterial({ color: 0x72d3c9, roughness: 0.32, metalness: 0.14 })
-      );
-      header.position.y = 0.36;
-      thumb.position.y = -0.03;
-      card.add(panel, header, thumb);
-      card.userData.index = index;
-      browserGroup.add(card);
-    }
-    scene.add(browserGroup);
-    browserGroupRef.current = browserGroup;
-
     const transferGroup = new THREE.Group();
     transferGroup.position.set(0, 1.7, 0.38);
     const trayMaterial = new THREE.MeshStandardMaterial({
@@ -825,7 +688,7 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
     transferGroup.add(leftTray, rightTray);
     for (let index = 0; index < 4; index += 1) {
       const item = new THREE.Mesh(
-        new THREE.BoxGeometry(0.36, 0.36, 0.36),
+        new THREE.DodecahedronGeometry(0.24, 0),
         new THREE.MeshStandardMaterial({
           color: [0x72d3c9, 0xd7b95c, 0xff7a72, 0x9cf18b][index],
           roughness: 0.34,
@@ -839,15 +702,6 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
     }
     scene.add(transferGroup);
     transferGroupRef.current = transferGroup;
-
-    const anchor = new THREE.Mesh(
-      new THREE.TorusGeometry(0.42, 0.015, 12, 80),
-      new THREE.MeshStandardMaterial({ color: 0x9cf18b, roughness: 0.42, metalness: 0.08 })
-    );
-    anchor.rotation.x = Math.PI / 2;
-    anchor.position.set(0, -1.18, 0.72);
-    scene.add(anchor);
-    anchorRef.current = anchor;
 
     const pointer = new THREE.Mesh(
       new THREE.SphereGeometry(0.055, 24, 24),
@@ -876,40 +730,13 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
       const elapsed = clock.getElapsedTime();
 
       if (objectRef.current) {
-        objectRef.current.visible = currentTask !== "scroll" && currentTask !== "browser" && currentTask !== "transfer";
-        const targetX =
-          currentTask === "carousel"
-            ? (current.carouselIndex - 2) * -0.42
-            : currentTask === "placement" || currentTask === "measurement" || currentTask === "assembly" || currentTask === "docking"
-              ? current.pointerX * 1.35
-              : 0;
-        const targetY = currentTask === "placement" || currentTask === "docking" ? -0.1 : 0.48;
-        objectRef.current.position.x += (targetX - objectRef.current.position.x) * 0.08;
-        objectRef.current.position.y += (targetY - objectRef.current.position.y) * 0.08;
+        objectRef.current.visible = currentTask === "object";
+        objectRef.current.position.x += (current.pointerX * 0.18 - objectRef.current.position.x) * 0.08;
+        objectRef.current.position.y += (0.48 - objectRef.current.position.y) * 0.08;
         objectRef.current.rotation.x = Math.sin(elapsed * 0.55) * 0.08;
         objectRef.current.rotation.y += (current.rotationY - objectRef.current.rotation.y) * 0.08;
-        const targetScale = current.selected || current.anchored ? current.scale * 1.04 : current.scale;
+        const targetScale = current.selected ? current.scale * 1.04 : current.scale;
         objectRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.08);
-      }
-
-      if (targetGroupRef.current) {
-        targetGroupRef.current.visible =
-          currentTask === "targets" ||
-          currentTask === "carousel" ||
-          currentTask === "inspection" ||
-          currentTask === "assembly" ||
-          currentTask === "info" ||
-          currentTask === "tour";
-        targetGroupRef.current.children.forEach((child, index) => {
-          const activeIndex =
-            currentTask === "inspection" || currentTask === "info"
-              ? current.inspectionPanel
-              : currentTask === "carousel" || currentTask === "tour" || currentTask === "assembly"
-                ? current.carouselIndex
-                : current.targetIndex;
-          const scale = index === activeIndex ? 1.55 : 1;
-          child.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.12);
-        });
       }
 
       if (scrollGroupRef.current) {
@@ -931,21 +758,6 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
               material.emissiveIntensity = active ? 0.55 : 0;
             }
           });
-        });
-      }
-
-      if (browserGroupRef.current) {
-        browserGroupRef.current.visible = currentTask === "browser";
-        browserGroupRef.current.children.forEach((child, index) => {
-          const card = child as THREE.Group;
-          const offset = index - current.browserIndex;
-          const targetX = offset * 0.74;
-          const targetZ = -Math.abs(offset) * 0.18;
-          card.position.x += (targetX - card.position.x) * 0.1;
-          card.position.z += (targetZ - card.position.z) * 0.1;
-          card.rotation.y += (-offset * 0.18 - card.rotation.y) * 0.1;
-          const activeScale = index === current.browserIndex ? (current.selected ? current.scale * 1.1 : 1.08) : 0.74;
-          card.scale.lerp(new THREE.Vector3(activeScale, activeScale, activeScale), 0.12);
         });
       }
 
@@ -977,22 +789,15 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
         });
       }
 
-      if (anchorRef.current) {
-        anchorRef.current.visible = currentTask === "placement" || currentTask === "measurement" || currentTask === "docking";
-        anchorRef.current.position.x += (current.pointerX * 1.35 - anchorRef.current.position.x) * 0.12;
-        const anchorScale = current.anchored ? 1.3 : 1 + Math.sin(elapsed * 4) * 0.08;
-        anchorRef.current.scale.lerp(new THREE.Vector3(anchorScale, anchorScale, anchorScale), 0.14);
-      }
-
       if (pointerRef.current) {
         pointerRef.current.position.x += (current.pointerX - pointerRef.current.position.x) * 0.18;
         pointerRef.current.position.y += (current.pointerY + 0.68 - pointerRef.current.position.y) * 0.18;
-        pointerRef.current.visible = current.action === "pointer_hover" || current.selected || currentTask === "targets";
+        pointerRef.current.visible = currentTask === "object" || currentTask === "transfer" || current.action === "pointer_hover" || current.selected;
       }
 
       if (materialRef.current) {
-        materialRef.current.color.set(current.selected || current.anchored ? 0x9cf18b : 0x72d3c9);
-        materialRef.current.emissive.set(current.selected || current.anchored ? 0x183a10 : 0x061f1d);
+        materialRef.current.color.set(current.selected ? 0x9cf18b : 0x72d3c9);
+        materialRef.current.emissive.set(current.selected ? 0x183a10 : 0x061f1d);
       }
 
       renderer.render(scene, camera);
@@ -1090,23 +895,17 @@ function GuidePage() {
         </div>
       </div>
       <div className="guide-grid">
-        {gestureGuideCards.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article className={`guide-card ${item.id}`} key={item.id}>
-              <div className="gesture-visual">
-                <Icon size={34} strokeWidth={1.8} />
-                <span className="gesture-motion" />
-              </div>
-              <div>
-                <span>{item.action}</span>
-                <strong>{item.label}</strong>
-                <p>{item.pose}</p>
-              </div>
-              <em>{item.cue}</em>
-            </article>
-          );
-        })}
+        {gestureGuideCards.map((item) => (
+          <article className={`guide-card ${item.id}`} key={item.id}>
+            <GesturePoseVisual gesture={item.id} />
+            <div>
+              <span>{item.action}</span>
+              <strong>{item.label}</strong>
+              <p>{item.pose}</p>
+            </div>
+            <em>{item.cue}</em>
+          </article>
+        ))}
       </div>
       <section className="panel guide-flow">
         <div>
@@ -1120,107 +919,6 @@ function GuidePage() {
           <p>Direct Control is left only for raw baseline checks; TARC is the intended demo mode.</p>
         </div>
       </section>
-    </section>
-  );
-}
-
-function ChartsPage() {
-  return (
-    <section className="results-page charts-page">
-      <div className="results-header">
-        <BarChart3 size={22} />
-        <div>
-          <h2>Methodology Charts</h2>
-          <p>Recognition, action-safety and task-level AR results from the prepared IPN benchmark reports.</p>
-        </div>
-      </div>
-      <div className="insight-strip">
-        <article>
-          <span>Main contribution</span>
-          <strong>M3 TARC</strong>
-          <p>Task-aware risk calibration keeps baseline-level completion while cutting false action cost.</p>
-        </article>
-        <article>
-          <span>Best recognition</span>
-          <strong>M2 Robust C6</strong>
-          <p>Augmented TCN fusion lifts weak-class recognition and lowers false actions.</p>
-        </article>
-        <article>
-          <span>Best safety</span>
-          <strong>M3 Proposed</strong>
-          <p>Lowest false-cost operating point among official methods.</p>
-        </article>
-      </div>
-      <div className="chart-grid">
-        <MetricBarChart
-          title="Recognition Macro F1"
-          subtitle="Classifier-level performance on public IPN test."
-          values={recognitionChartRows}
-          valueKey="macroF1"
-        />
-        <MetricBarChart
-          title="Action Replay False Cost"
-          subtitle="Weighted false AR action cost in replay evaluation."
-          values={c4RiskChartRows}
-          valueKey="falseCost"
-          lowerIsBetter
-        />
-        <MetricBarChart
-          title="Task-Level False Cost"
-          subtitle="Weighted false action cost over AR scenario trials."
-          values={c4TaskChartRows}
-          valueKey="falseCost"
-          lowerIsBetter
-        />
-        <MetricBarChart
-          title="Task Success Rate"
-          subtitle="Full task completion across 13 AR scenarios."
-          values={c4TaskChartRows}
-          valueKey="success"
-        />
-        <MetricBarChart
-          title="Weak Scenario Success"
-          subtitle="Lowest C4 task-aware task success rates."
-          values={weakTaskRows.map((item) => ({ method: item.task, success: item.success }))}
-          valueKey="success"
-        />
-        <MetricBarChart
-          title="Weak Scenario Missed Cost"
-          subtitle="Missed action cost explains remaining task failures."
-          values={weakTaskRows.map((item) => ({ method: item.task, missedCost: item.missedCost }))}
-          valueKey="missedCost"
-          lowerIsBetter
-        />
-        <TradeoffChart />
-      </div>
-      <div className="results-table panel thesis-claim-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Claim</th>
-              <th>Evidence</th>
-              <th>Interpretation</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Recognition alone is not the thesis</td>
-              <td>M1 macro F1 0.850; M2 macro F1 0.887</td>
-              <td>The recognizer is improved, but live AR still needs command safety.</td>
-            </tr>
-            <tr>
-              <td>Task-aware control reduces accidental commands</td>
-              <td>False cost 0.110 to 0.025</td>
-              <td>TARC treats classifier output as an action proposal, not an immediate command.</td>
-            </tr>
-            <tr>
-              <td>Usability trade-off is explicit</td>
-              <td>Task success 0.531 with precision 0.974</td>
-              <td>The proposed method optimizes safety while preserving guided-task completion.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }
@@ -1304,6 +1002,28 @@ function ResultsPage() {
           </div>
         </dl>
       </section>
+      <div className="chart-grid compact-results-charts">
+        <MetricBarChart
+          title="Recognition Macro F1"
+          subtitle="Classifier-level performance on public IPN test."
+          values={recognitionChartRows}
+          valueKey="macroF1"
+        />
+        <MetricBarChart
+          title="Task Success Rate"
+          subtitle="Full task completion across the official AR scenario benchmark."
+          values={c4TaskChartRows}
+          valueKey="success"
+        />
+        <MetricBarChart
+          title="False Action Cost"
+          subtitle="Lower is better; accidental AR commands are penalized by task risk."
+          values={c4TaskChartRows}
+          valueKey="falseCost"
+          lowerIsBetter
+        />
+        <TradeoffChart />
+      </div>
       <div className="results-table panel task-results-table">
         <table>
           <thead>
@@ -1433,13 +1153,15 @@ function TaskProgressOverlay({
   taskRun,
   live,
   detectionRate,
-  policyContext
+  policyContext,
+  controlContext
 }: {
   task: TaskDefinition;
   taskRun: TaskRunState;
   live: boolean;
   detectionRate: string;
   policyContext: PolicyContext | null;
+  controlContext: ControlContext | null;
 }) {
   const complete = taskRun.completed >= task.steps.length;
   const detectionValue = Number(detectionRate);
@@ -1447,10 +1169,13 @@ function TaskProgressOverlay({
   const policyStepIndex = typeof policyContext?.step_index === "number" ? policyContext.step_index : null;
   const policyStepCount = typeof policyContext?.step_count === "number" ? policyContext.step_count : task.steps.length;
   const expectedAction = policyContext?.expected_action || task.steps[taskRun.completed]?.action || "idle";
-  const expectedLabel = policyContext?.expected_label || task.steps[taskRun.completed]?.gesture || "no_gesture";
+  const expectedLabel = (policyContext?.expected_label || task.steps[taskRun.completed]?.gesture || "no_gesture") as GestureId;
   const expectedTitle = expectedAction === "idle" ? "Idle" : actionLabels[expectedAction];
   const currentGuide = gestureGuideCards.find((item) => item.id === expectedLabel);
-  const CurrentGuideIcon = currentGuide?.icon ?? MousePointer2;
+  const controlProgress = Math.round(Math.max(0, Math.min(1, controlContext?.progress ?? 0)) * 100);
+  const controlMode = controlContext?.mode ?? (live ? "tracking" : "standby");
+  const candidateLabel = (controlContext?.candidate_label || expectedLabel) as GestureId;
+  const candidateName = gestureDisplayName(candidateLabel);
 
   return (
     <div className="task-progress-overlay">
@@ -1460,12 +1185,33 @@ function TaskProgressOverlay({
       </div>
       {!complete && currentGuide ? (
         <div className="current-gesture-cue">
-          <CurrentGuideIcon size={28} strokeWidth={1.8} />
+          <GesturePoseVisual gesture={expectedLabel} compact />
           <div>
             <span>Do now</span>
             <strong>{currentGuide.label}</strong>
             <p>{currentGuide.pose}</p>
+            <em>{currentGuide.cue}</em>
           </div>
+        </div>
+      ) : null}
+      {live ? (
+        <div className={`gesture-lock-panel ${controlMode}`}>
+          <div>
+            <span>{controlMode === "locked" ? "Gesture locked" : controlMode === "preparing" ? "Hold gesture" : "Gesture gate"}</span>
+            <strong>{candidateName}</strong>
+          </div>
+          <div className="gesture-lock-track" aria-label="Gesture lock progress">
+            <span style={{ width: `${controlProgress}%` }} />
+          </div>
+          <em>
+            {controlMode === "locked"
+              ? "Command is being held for the task controller."
+              : controlMode === "cooldown"
+                ? "Pause briefly before the next command."
+                : controlContext?.click_armed
+                  ? "Click is armed: close briefly, then open."
+                  : "Make the shown gesture until the bar fills."}
+          </em>
         </div>
       ) : null}
       {policyContext ? (
@@ -1476,7 +1222,7 @@ function TaskProgressOverlay({
           </div>
           <div>
             <span>Gesture</span>
-            <strong>{expectedLabel}</strong>
+            <strong>{gestureDisplayName(expectedLabel)}</strong>
           </div>
           <div>
             <span>Policy step</span>
@@ -1499,7 +1245,7 @@ function TaskProgressOverlay({
             <div key={step.id} className={done ? "done" : current ? "current" : ""}>
               {done ? <CheckCircle2 size={16} /> : <Circle size={16} />}
               <span>{step.label}</span>
-              <strong>{step.gesture}</strong>
+              <strong>{gestureDisplayName(step.gesture)}</strong>
             </div>
           );
         })}
@@ -1530,17 +1276,15 @@ function App() {
   const [backendHealth, setBackendHealth] = useState<BackendHealth>("checking");
   const [backendStatus, setBackendStatus] = useState("stream stopped");
   const [backendConfidence, setBackendConfidence] = useState("--");
-  const [sampleId, setSampleId] = useState("");
-  const [targetLabel, setTargetLabel] = useState("");
   const [detectionRate, setDetectionRate] = useState("--");
   const [streamFps, setStreamFps] = useState("--");
   const [processingMs, setProcessingMs] = useState("--");
-  const [sessionId, setSessionId] = useState("");
   const [previewImage, setPreviewImage] = useState("");
   const [landmarks, setLandmarks] = useState<number[][]>([]);
   const [cameraStats, setCameraStats] = useState<CameraStats | null>(null);
   const [pointerScreen, setPointerScreen] = useState<{ x: number; y: number } | null>(null);
   const [policyContext, setPolicyContext] = useState<PolicyContext | null>(null);
+  const [controlContext, setControlContext] = useState<ControlContext | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [sceneState, setSceneState] = useState<SceneState>(initialSceneState);
   const [taskRun, setTaskRun] = useState<TaskRunState>(initialTaskRunState);
@@ -1549,7 +1293,6 @@ function App() {
   const backendHealthText =
     backendHealth === "ready" ? "backend ready" : backendHealth === "checking" ? "checking backend" : "backend offline";
   const targetFps = Math.round(1000 / intervalMs);
-  const sessionLabel = sessionId ? sessionId.split("_").slice(1, 3).join("_") : "--";
   const captureFps = Math.max(DEFAULT_TARGET_FPS, targetFps);
   const cameraResolution =
     cameraStats?.width && cameraStats?.height
@@ -1564,7 +1307,7 @@ function App() {
     backendStatus === "backend unavailable"
       ? {
           title: "Backend is unavailable",
-          body: "Start the Python backend, then press Start Camera again."
+          body: "Start the Python backend, then press Start Task again."
         }
       : backendStatus.startsWith("Cannot open camera")
         ? {
@@ -1578,7 +1321,7 @@ function App() {
             }
           : {
               title: "Camera stream is stopped",
-              body: "Start Camera activates the live AR layer."
+              body: "Start Task activates the live AR layer."
             };
 
   useEffect(() => {
@@ -1604,15 +1347,13 @@ function App() {
   useEffect(() => {
     setPreviewImage("");
     setLandmarks([]);
-    setSampleId("");
-    setTargetLabel("");
     setDetectionRate("--");
     setStreamFps("--");
     setProcessingMs("--");
-    setSessionId("");
     setCameraStats(null);
     setPointerScreen(null);
     setPolicyContext(null);
+    setControlContext(null);
   }, [source, cameraIndex]);
 
   useEffect(() => {
@@ -1637,6 +1378,7 @@ function App() {
       setBackendConfidence("--");
       setPointerScreen(null);
       setPolicyContext(null);
+      setControlContext(null);
       return;
     }
 
@@ -1675,15 +1417,13 @@ function App() {
         setGesture(payload.gesture);
       }
       setBackendConfidence(typeof payload.confidence === "number" ? payload.confidence.toFixed(2) : "--");
-      setSampleId(payload.sample_id ?? "");
-      setTargetLabel(payload.target_label ?? "");
       setDetectionRate(typeof payload.detection_rate === "number" ? payload.detection_rate.toFixed(2) : "--");
       setStreamFps(typeof payload.fps === "number" ? payload.fps.toFixed(1) : "--");
       setProcessingMs(typeof payload.processing_ms === "number" ? payload.processing_ms.toFixed(0) : "--");
-      setSessionId(payload.session_id ?? "");
       setPreviewImage(payload.preview_image ?? "");
       setLandmarks(payload.landmarks ?? []);
       setCameraStats(payload.camera ?? null);
+      setControlContext(payload.control_context ?? null);
       setPointerScreen((current) => {
         if (!payload.pointer || source !== "webcam") return null;
         if (!current) return payload.pointer;
@@ -1698,8 +1438,8 @@ function App() {
         setTaskRun((current) => advanceTaskRun(current, selectedTask, nextAction));
       }
       setSceneState((current) => {
-        const rawPointerX = payload.pointer && source === "webcam" ? payload.pointer.x * 1.84 - 0.92 : null;
-        const rawPointerY = payload.pointer && source === "webcam" ? (0.5 - payload.pointer.y) * 1.2 : null;
+        const rawPointerX = payload.pointer && source === "webcam" ? payload.pointer.x * 1.5 - 0.75 : null;
+        const rawPointerY = payload.pointer && source === "webcam" ? (0.5 - payload.pointer.y) * 0.9 : null;
         const pointerX = rawPointerX !== null ? current.pointerX + (rawPointerX - current.pointerX) * POINTER_SMOOTHING : null;
         const pointerY = rawPointerY !== null ? current.pointerY + (rawPointerY - current.pointerY) * POINTER_SMOOTHING : null;
         const withPointer =
@@ -1707,8 +1447,7 @@ function App() {
             ? {
                 ...current,
                 pointerX,
-                pointerY,
-                targetIndex: Math.max(0, Math.min(4, Math.round(((pointerX + 0.92) / 1.84) * 4)))
+                pointerY
               }
             : current;
         if (nextAction === "pointer_hover" && pointerX !== null && pointerY !== null) {
@@ -1784,11 +1523,7 @@ function App() {
           </button>
           <button type="button" className={page === "results" ? "active" : ""} onClick={() => setPage("results")}>
             <BarChart3 size={16} />
-            Tables
-          </button>
-          <button type="button" className={page === "charts" ? "active" : ""} onClick={() => setPage("charts")}>
-            <BarChart3 size={16} />
-            Charts
+            Results
           </button>
         </section>
 
@@ -1898,7 +1633,7 @@ function App() {
             </div>
             <div>
               <span>Gesture</span>
-              <strong>{gesture}</strong>
+              <strong>{gestureDisplayName(gesture)}</strong>
             </div>
           </div>
         </section>
@@ -1943,7 +1678,7 @@ function App() {
                   <input
                     type="number"
                     min={640}
-                    max={1280}
+                    max={1920}
                     step={80}
                     value={previewWidth}
                     onChange={(event) => setPreviewWidth(Number(event.target.value))}
@@ -1986,9 +1721,7 @@ function App() {
         ) : null}
       </aside>
 
-      {page === "charts" ? (
-        <ChartsPage />
-      ) : page === "guide" ? (
+      {page === "guide" ? (
         <GuidePage />
       ) : page === "results" ? (
         <ResultsPage />
@@ -2028,23 +1761,16 @@ function App() {
             live={live}
             detectionRate={detectionRate}
             policyContext={policyContext}
+            controlContext={controlContext}
           />
           <div className="telemetry">
             <div>
               <span>Gesture</span>
-              <strong>{gesture}</strong>
+              <strong>{gestureDisplayName(gesture)}</strong>
             </div>
             <div>
               <span>Action</span>
               <strong>{sceneState.action}</strong>
-            </div>
-            <div>
-              <span>Scale</span>
-              <strong>{sceneState.scale.toFixed(2)}</strong>
-            </div>
-            <div>
-              <span>Hits</span>
-              <strong>{sceneState.hits}</strong>
             </div>
             <div>
               <span>Conf</span>
@@ -2061,18 +1787,6 @@ function App() {
             <div>
               <span>Proc</span>
               <strong>{processingMs === "--" ? "--" : `${processingMs} ms`}</strong>
-            </div>
-            <div>
-              <span>Input</span>
-              <strong>{source === "webcam" ? `cam ${cameraIndex}` : targetLabel || "dataset"}</strong>
-            </div>
-            <div>
-              <span>Log</span>
-              <strong>{sessionLabel}</strong>
-            </div>
-            <div>
-              <span>Policy</span>
-              <strong>{policyContext?.expected_action || interactionModeLabels[interactionMode]}</strong>
             </div>
             <div className={sceneState.selected ? "selected-indicator on" : "selected-indicator"}>
               <Sparkles size={16} />

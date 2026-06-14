@@ -147,7 +147,7 @@ python -m research_pipeline.cli.generate_c3_research_assets
 - `artifacts/figures/c3_ablation_perturbed_macro_f1.png`;
 - `artifacts/figures/c3_policy_unintended_action_rate.png`.
 
-Live-интерфейс теперь также использует `C3 Hybrid + C2 Gate` как основной режим для webcam AR задач, чтобы демонстрационная часть соответствовала исследовательской постановке.
+Live-интерфейс больше не использует сегментный классификатор как единственный источник команд. Webcam AR режим использует landmark-first live controller для непрерывного управления, а C3/C6 recognizer остается исследовательским сигналом для benchmark, логирования и сравнения с `TARC`.
 
 ## Реконцептуализация после C3
 

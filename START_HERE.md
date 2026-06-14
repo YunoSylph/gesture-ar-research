@@ -5,12 +5,14 @@
 Откройте PowerShell в корне проекта:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project"
+cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research"
 powershell -ExecutionPolicy Bypass -File .\scripts\start_ar_demo.ps1
 ```
 
 Скрипт запустит:
 
+- `.venv311` и live-зависимости из `requirements/live.txt`, если окружение еще не создано;
+- `npm install` для frontend, если `node_modules` отсутствует;
 - Python backend на `http://127.0.0.1:8000`;
 - React/Three.js интерфейс на первом свободном порту `5173-5179`;
 - браузер с точным адресом интерфейса.
@@ -28,15 +30,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_ar_demo.ps1 -Restart
 Терминал 1:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project"
+cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research"
+python -m venv .venv311
 .\.venv311\Scripts\Activate.ps1
+pip install -r requirements\live.txt
 python -m research_pipeline.cli.serve_live --host 127.0.0.1 --port 8000
 ```
 
 Терминал 2:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\demo\ar_interaction_app"
+cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research\demo\ar_interaction_app"
 npm install
 npm run dev -- --port 5173
 ```
@@ -45,28 +49,27 @@ npm run dev -- --port 5173
 
 ## 3. Как пользоваться интерфейсом
 
-1. Проверьте, что в блоке `Live Status` backend показывает `backend ready`.
+1. Проверьте, что в блоке `Telemetry` backend показывает `backend ready`.
 2. Выберите задачу в блоке `AR Task`.
 3. Нажмите `Start Task`.
 4. Камера должна стать фоном AR-сцены, а объект должен отображаться поверх видео.
-5. Выполняйте жест, который подсвечен в правом верхнем overlay.
-6. Смотрите `Live Status`: `FPS`, `Capture`, `Proc`, `Age`, `Detect`, разрешение камеры и текущий жест.
-7. По умолчанию выбран усиленный метод `C6 Ensemble`. Если нужно вручную выбрать другую модель, dataset replay, C4/C2/direct mode, camera index или тестовые кнопки жестов, откройте `Advanced Controls`.
+5. Выполняйте жест, который подсвечен в правом верхнем overlay, и доводите lock bar до `locked`.
+6. Смотрите `Telemetry`: текущий жест, `FPS`, `Proc`, `Detect` и состояние камеры.
+7. По умолчанию выбран усиленный метод `Robust C6` и режим `TARC`. Если нужно вручную выбрать другую модель, direct mode, camera index, FPS или тестовые кнопки жестов, откройте `Advanced Controls`.
 
 ## 3.1. AR task-сценарии
 
-В блоке `AR Task` теперь оставлены только 4 понятных live-сценария:
+В блоке `AR Task` теперь оставлены только 3 понятных live-сценария:
 
-- `Object: select and scale`: наведение на куб, короткий click, zoom in, zoom out.
-- `List: scroll and open`: свайпы по AR-списку и короткий click по строке.
-- `Cards: browse and inspect`: браузинг карточек, открытие и приближение.
-- `Sorting: move item`: выбор предмета, перенос в контейнер и сброс.
-
-Полная библиотека сценариев остаётся внутри проекта для benchmark-отчётов, но не перегружает live-интерфейс.
+- `1. Object control`: наведение на AR-модуль, короткий click, приближение руки, отведение руки назад.
+- `2. Scroll and open`: горизонтальный swipe right/left по AR-списку и короткий click по строке.
+- `3. Sort virtual item`: выбор предмета, перенос в правый контейнер и сброс.
 
 Кнопка `Start Task` переводит ввод в `Camera Stream`, запускает live-сессию и начинает проверять шаги сценария по действиям, которые приходят из backend через WebSocket. Если камера закрыта шторкой, task останется в состоянии ожидания и покажет низкое обнаружение руки.
 
 Вкладка `Guide` в интерфейсе показывает названия жестов, визуальные подсказки и действие каждого жеста. Подробная инструкция: `docs/ar_interface_user_guide.md`.
+
+Техническая оценка live-качества на записанном webcam-видео и объяснение, почему добавлен landmark-first controller: `docs/live_model_assessment.md`.
 
 Примеры жестов, нотация и CSV-последовательности задач: `data/interaction_gesture_examples`. Быстрая памятка по связке жестов с задачами: `data/interaction_gesture_examples/TASK_INTERACTIONS.md`.
 

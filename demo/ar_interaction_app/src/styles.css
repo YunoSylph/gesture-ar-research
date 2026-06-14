@@ -111,7 +111,7 @@ p {
 }
 
 .page-tabs {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .segmented.three-way {
@@ -559,8 +559,8 @@ p {
   top: 18px;
   right: 18px;
   display: grid;
-  gap: 10px;
-  width: min(360px, calc(100% - 36px));
+  gap: 9px;
+  width: min(340px, calc(100% - 36px));
   padding: 12px;
   border: 1px solid rgba(185, 206, 211, 0.2);
   border-radius: 8px;
@@ -596,18 +596,14 @@ p {
 
 .current-gesture-cue {
   display: grid;
-  grid-template-columns: 42px 1fr;
+  grid-template-columns: 74px 1fr;
   align-items: center;
   gap: 10px;
-  min-height: 64px;
+  min-height: 92px;
   border: 1px solid rgba(114, 211, 201, 0.34);
   border-radius: 8px;
   background: rgba(17, 44, 42, 0.82);
   padding: 9px 10px;
-}
-
-.current-gesture-cue svg {
-  color: #b8fff8;
 }
 
 .current-gesture-cue div {
@@ -625,13 +621,386 @@ p {
 
 .current-gesture-cue strong {
   color: #f2fffd;
-  font-size: 17px;
+  font-size: 19px;
 }
 
-.current-gesture-cue p {
+.current-gesture-cue p,
+.current-gesture-cue em {
   color: #c8d7d5;
   font-size: 12px;
   line-height: 1.25;
+}
+
+.current-gesture-cue em {
+  color: #f0d996;
+  font-style: normal;
+}
+
+.gesture-lock-panel {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(127, 182, 200, 0.18);
+  border-radius: 8px;
+  background: rgba(16, 24, 32, 0.72);
+  padding: 9px 10px;
+}
+
+.gesture-lock-panel.locked {
+  border-color: rgba(156, 241, 139, 0.45);
+  background: rgba(18, 42, 30, 0.78);
+}
+
+.gesture-lock-panel.preparing {
+  border-color: rgba(240, 217, 150, 0.5);
+  background: rgba(43, 37, 22, 0.78);
+}
+
+.gesture-lock-panel.cooldown {
+  border-color: rgba(255, 122, 114, 0.38);
+  background: rgba(47, 25, 24, 0.72);
+}
+
+.gesture-lock-panel div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gesture-lock-panel span {
+  color: #8fdad2;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.gesture-lock-panel strong {
+  color: #f2fffd;
+  font-size: 13px;
+}
+
+.gesture-lock-track {
+  height: 9px;
+  overflow: hidden;
+  border: 1px solid rgba(185, 206, 211, 0.22);
+  border-radius: 999px;
+  background: rgba(9, 14, 18, 0.82);
+}
+
+.gesture-lock-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7fb6c8, #9cf18b);
+  transition: width 90ms linear;
+}
+
+.gesture-lock-panel.preparing .gesture-lock-track span {
+  background: linear-gradient(90deg, #c8aa63, #f0d996);
+}
+
+.gesture-lock-panel.cooldown .gesture-lock-track span {
+  background: linear-gradient(90deg, #ff7a72, #f0d996);
+}
+
+.gesture-lock-panel em {
+  color: #c8d7d5;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.gesture-pose {
+  position: relative;
+  display: block;
+  width: 96px;
+  height: 104px;
+  overflow: hidden;
+  border: 1px solid rgba(127, 182, 200, 0.28);
+  border-radius: 8px;
+  background: #10171b;
+}
+
+.gesture-pose.compact {
+  width: 66px;
+  height: 72px;
+}
+
+.pose-orbit {
+  position: absolute;
+  inset: 16px 14px 12px;
+  border: 1px solid rgba(114, 211, 201, 0.24);
+  border-radius: 999px;
+}
+
+.pose-hand {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 58px;
+  height: 78px;
+  transform: translate(-50%, -50%);
+  transform-origin: 50% 72%;
+}
+
+.gesture-pose.compact .pose-hand {
+  transform: translate(-50%, -50%) scale(0.72);
+}
+
+.pose-hand.ghost {
+  display: none;
+  opacity: 0.25;
+}
+
+.pose-hand i {
+  position: absolute;
+  display: block;
+  background: #d9e5e8;
+  box-shadow: inset 0 -2px 0 rgba(16, 23, 27, 0.24);
+}
+
+.pose-hand .palm {
+  left: 15px;
+  bottom: 13px;
+  width: 31px;
+  height: 34px;
+  border-radius: 14px 14px 16px 16px;
+  background: #d9e5e8;
+}
+
+.pose-hand .wrist {
+  left: 22px;
+  bottom: 0;
+  width: 17px;
+  height: 18px;
+  border-radius: 6px;
+  background: #b8c7cc;
+}
+
+.pose-hand .finger {
+  bottom: 42px;
+  width: 8px;
+  border-radius: 999px;
+  transform-origin: 50% 100%;
+}
+
+.pose-hand .thumb {
+  left: 6px;
+  bottom: 25px;
+  width: 9px;
+  height: 28px;
+  transform: rotate(-42deg);
+  background: #c9d8dc;
+}
+
+.pose-hand .index {
+  left: 17px;
+  height: 44px;
+}
+
+.pose-hand .middle {
+  left: 26px;
+  height: 48px;
+}
+
+.pose-hand .ring {
+  left: 35px;
+  height: 39px;
+  background: #cbd9dd;
+}
+
+.pose-hand .pinky {
+  left: 43px;
+  height: 32px;
+  background: #c3d1d5;
+}
+
+.gesture-pose.point_2f .pose-hand .ring,
+.gesture-pose.point_2f .pose-hand .pinky {
+  height: 20px;
+  transform: rotate(10deg);
+}
+
+.gesture-pose.click_2f .pose-hand .index {
+  left: 17px;
+  height: 42px;
+  transform-origin: 50% 100%;
+  animation: clickIndex 1.15s ease-in-out infinite;
+}
+
+.gesture-pose.click_2f .pose-hand .middle {
+  height: 36px;
+  transform: rotate(7deg);
+}
+
+.gesture-pose.click_2f .pose-hand .ring,
+.gesture-pose.click_2f .pose-hand .pinky {
+  height: 22px;
+  transform: rotate(12deg);
+}
+
+.gesture-pose.click_2f .pose-hand .thumb {
+  animation: clickThumb 1.15s ease-in-out infinite;
+}
+
+.gesture-pose.click_2f .pose-touch {
+  position: absolute;
+  left: 38%;
+  top: 39px;
+  display: block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #f0d996;
+  border-radius: 999px;
+  opacity: 0;
+  transform: translateX(-50%);
+  animation: touchPulse 1.15s ease-in-out infinite;
+}
+
+.gesture-pose.swipe_left .pose-hand,
+.gesture-pose.swipe_right .pose-hand {
+  animation: swipeHand 1.3s ease-in-out infinite;
+}
+
+.gesture-pose.swipe_left .pose-hand.ghost,
+.gesture-pose.swipe_right .pose-hand.ghost {
+  display: block;
+}
+
+.gesture-pose.swipe_left .pose-hand.ghost {
+  transform: translate(4px, -50%) scale(0.84);
+}
+
+.gesture-pose.swipe_right .pose-hand.ghost {
+  transform: translate(-62px, -50%) scale(0.84);
+}
+
+.gesture-pose.swipe_left .pose-arrow,
+.gesture-pose.swipe_right .pose-arrow {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 13px;
+  height: 3px;
+  border-radius: 999px;
+  background: #f0d996;
+}
+
+.gesture-pose.swipe_left .pose-arrow::before,
+.gesture-pose.swipe_right .pose-arrow::before {
+  position: absolute;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-top: 3px solid #f0d996;
+  border-left: 3px solid #f0d996;
+  content: "";
+}
+
+.gesture-pose.swipe_left .pose-arrow::before {
+  left: 0;
+  transform: rotate(-45deg);
+}
+
+.gesture-pose.swipe_right .pose-arrow::before {
+  right: 0;
+  transform: rotate(135deg);
+}
+
+.gesture-pose.zoom_in .pose-hand,
+.gesture-pose.zoom_out .pose-hand {
+  animation: zoomHand 1.35s ease-in-out infinite;
+}
+
+.gesture-pose.zoom_out .pose-hand {
+  animation-direction: reverse;
+}
+
+.gesture-pose.zoom_in .pose-orbit,
+.gesture-pose.zoom_out .pose-orbit {
+  border-color: rgba(240, 217, 150, 0.58);
+  animation: zoomOrbit 1.35s ease-in-out infinite;
+}
+
+@keyframes clickIndex {
+  0%,
+  100% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+  45%,
+  58% {
+    transform: rotate(-28deg) translate(-5px, 11px);
+  }
+}
+
+@keyframes clickThumb {
+  0%,
+  100% {
+    transform: rotate(-42deg) translate(0, 0);
+  }
+  45%,
+  58% {
+    transform: rotate(-18deg) translate(8px, -7px);
+  }
+}
+
+@keyframes touchPulse {
+  0%,
+  34%,
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.7);
+  }
+  48%,
+  62% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes swipeHand {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  48% {
+    transform: translate(-18%, -50%);
+  }
+}
+
+.gesture-pose.swipe_left .pose-hand {
+  animation-name: swipeHandLeft;
+}
+
+@keyframes swipeHandLeft {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  48% {
+    transform: translate(-82%, -50%);
+  }
+}
+
+@keyframes zoomHand {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(0.78);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes zoomOrbit {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
 }
 
 .policy-context-panel div {
@@ -861,54 +1230,17 @@ p {
 
 .guide-card {
   display: grid;
-  grid-template-columns: 76px 1fr;
+  grid-template-columns: 104px 1fr;
   grid-template-rows: auto auto;
   gap: 10px 12px;
-  min-height: 172px;
+  min-height: 196px;
   border: 1px solid #2b3640;
   border-radius: 8px;
   background: #182027;
   padding: 13px;
 }
 
-.gesture-visual {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 68px;
-  height: 68px;
-  border: 1px solid rgba(127, 182, 200, 0.28);
-  border-radius: 8px;
-  background: #10171b;
-  color: #b8fff8;
-}
-
-.gesture-motion {
-  position: absolute;
-  right: 8px;
-  bottom: 9px;
-  width: 26px;
-  height: 3px;
-  border-radius: 999px;
-  background: #d7b95c;
-  box-shadow: 0 -8px 0 rgba(215, 185, 92, 0.42);
-}
-
-.guide-card.swipe_left .gesture-motion,
-.guide-card.swipe_right .gesture-motion {
-  width: 34px;
-}
-
-.guide-card.zoom_in .gesture-motion,
-.guide-card.zoom_out .gesture-motion {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #d7b95c;
-  background: transparent;
-  box-shadow: none;
-}
-
-.guide-card > div:not(.gesture-visual) {
+.guide-card > div:not(.gesture-pose) {
   display: grid;
   align-content: start;
   gap: 4px;
@@ -1107,38 +1439,8 @@ p {
   margin-bottom: 14px;
 }
 
-.charts-page {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-}
-
-.insight-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.insight-strip article {
-  display: grid;
-  gap: 5px;
-  min-height: 112px;
-  border: 1px solid #2b3640;
-  border-radius: 8px;
-  background: #182027;
-  padding: 14px;
-}
-
-.insight-strip span {
-  color: #9aabb2;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.insight-strip strong {
-  color: #edf1f3;
-  font-size: 20px;
+.compact-results-charts {
+  margin-bottom: 14px;
 }
 
 .chart-grid {
@@ -1302,8 +1604,7 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chart-grid,
-  .insight-strip {
+  .chart-grid {
     grid-template-columns: 1fr;
   }
 

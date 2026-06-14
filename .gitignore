@@ -4,10 +4,14 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.sixth/
 artifacts/
+docs/generated/
 data/raw/
-data/processed/**/*.npz
+data/processed/
 node_modules/
 dist/
+demo/ar_interaction_app/dist/
+npm-debug.log*
 *.onnx
 *.mlpackage/

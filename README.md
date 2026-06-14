@@ -14,7 +14,9 @@ The project follows `deep-research-report.md`:
 ## Quick Smoke
 
 ```powershell
+python -m venv .venv311
 .\.venv311\Scripts\Activate.ps1
+pip install -r requirements\windows-train.txt -r requirements\dev.txt
 python -m research_pipeline.cli.smoke_public
 python -m research_pipeline.cli.smoke_demo
 python -m research_pipeline.cli.smoke_export
@@ -36,50 +38,20 @@ python -m research_pipeline.cli.export_onnx --config configs/export/onnx.yaml
 python -m research_pipeline.cli.export_coreml --config configs/export/coreml.yaml
 ```
 
-## Current Prepared Artifacts
+## Repository Contents
 
-- Python 3.11 environment: `.venv311`
-- IPN Hand annotations: `data/raw/ipn_hand/annotations`
-- IPN Hand videos: `data/raw/ipn_hand/videos/videos` plus original `.tgz` archives
-- Thesis subset manifest: `data/interim/manifests/ipn_subset.jsonl`
-- Initial extracted landmark subset:
-  - `data/interim/manifests/ipn_train_initial_landmarks.jsonl`
-  - `data/interim/manifests/ipn_test_initial_landmarks.jsonl`
-- Full extracted landmark benchmark:
-  - `data/interim/manifests/ipn_train_full_landmarks.jsonl`
-  - `data/interim/manifests/ipn_test_full_landmarks.jsonl`
-- Trained initial models:
-  - `artifacts/models/ipn_c1_rf_initial.pkl`
-  - `artifacts/models/ipn_c1t_initial.pkl`
-  - `artifacts/models/ipn_c1t_tcn_initial.pkl`
-- Trained full models:
-  - `artifacts/models/ipn_c1_rf_full.pkl`
-  - `artifacts/models/ipn_c1t_tcn_full.pkl`
-- ONNX export:
-  - `artifacts/export/ipn_c1t_tcn_full.onnx`
-  - `artifacts/export/ipn_c1t_tcn_full.onnx.data`
-- Validated TCN control branch:
-  - `artifacts/models/ipn_c1t_tcn_full_validated.pkl`
-  - `artifacts/export/ipn_c1t_tcn_full_validated.onnx`
-  - `artifacts/reports/ipn_c1t_tcn_full_validated_recognition.json`
-- C6 strengthened recognition branch:
-  - `artifacts/models/ipn_c1t_tcn_augmented.pkl`
-  - `artifacts/reports/ipn_c1t_tcn_augmented_recognition.json`
-  - `artifacts/reports/c6_augmented_robustness.json`
-  - `artifacts/reports/c6_ensemble_calibrated_recognition.json`
-  - `docs/c6_recognition_upgrade.md`
-- Phone AR portability/domain reports:
-  - `data/interim/manifests/local_phone_plan.jsonl`
-  - `artifacts/reports/domain_readiness.json`
-  - `artifacts/reports/recognition_risk_analysis.json`
-  - `artifacts/mobile/gesture_mobile_bundle`
-- C4 AR interaction-risk research:
-  - `artifacts/reports/c4_action_safe_research.json`
-  - `artifacts/reports/c4_task_benchmark.json`
-  - `artifacts/reports/c4_task_tables/*.csv`
-  - `artifacts/figures/c4_task_*.png`
-- AR interaction UI:
-  - `demo/ar_interaction_app`
+The GitHub repository intentionally keeps source materials rather than local build products:
+
+- research code, configs, tests and CLI tools;
+- React/Three.js live AR interface in `demo/ar_interaction_app`;
+- MediaPipe hand landmarker task in `models/mediapipe`;
+- public-dataset manifests in `data/interim/manifests`;
+- reference gesture clips and notation in `data/reference_gestures` and `data/interaction_gesture_examples`;
+- research and usage documentation in `docs`, `START_HERE.md`, and `PROJECT_OVERVIEW.md`.
+
+The following paths are local/generated and ignored: `.venv311`, `node_modules`, `artifacts`, `data/raw`, `data/processed`, `demo/ar_interaction_app/dist`, and `docs/generated`.
+
+Use `START_HERE.md` for the quickest live launch. Use `requirements/windows-train.txt` when reproducing full extraction/training/evaluation runs.
 
 See `docs/setup_training_summary.md` for exact commands and current metrics.
 
@@ -106,18 +78,17 @@ Open `http://127.0.0.1:5173`. If that port is already occupied, run `npm run dev
 
 In the UI:
 
-- `Demo` shows the AR task surface.
-- `Results` shows experiment metrics.
-- `Dataset File` streams saved IPN test landmarks through the backend.
-- `Camera Stream` opens the real local webcam through the backend and uses the live frame as the AR scene background.
-- `Direct Control` maps the current recognized gesture directly to the AR action, including fingertip cursor placement from MediaPipe landmarks.
-- `C2 Gate` applies confidence/stability filtering before emitting AR actions.
-- `TARC Controller` applies the task-aware risk-calibrated AR policy, using the selected task step as action context.
-- `Robust C6` is the default recognizer: validated TCN + augmented TCN + calibrated geometry fusion.
+- `Live` shows the camera-backed AR task surface.
 - `Guide` shows visual gesture cards and execution cues for the live demo gestures.
+- `Results` combines experiment charts and compact comparison tables.
+- `Start Task` opens the real local webcam through the backend and uses the live frame as the AR scene background.
+- `Direct Control` maps the current live landmark-controller gesture directly to the AR action, including fingertip cursor placement from MediaPipe landmarks.
+- `TARC Controller` applies the task-aware risk-calibrated AR policy, using the selected task step as action context and passing the expected gesture into the live controller.
+- Live gestures use a fixation cycle: `preparing -> locked -> cooldown`; the overlay lock bar shows when a gesture is actually accepted.
+- `Robust C6` is the default recognizer: validated TCN + augmented TCN + calibrated geometry fusion.
 - `Target FPS`, `Preview px`, and `JPEG` tune camera smoothness and preview quality.
-- `Start Camera` / `Start Dataset` connects the selected input source.
-- `Run Test` runs a UI-only gesture sequence for quick visual checks.
+- `Gesture Test Pad` in `Advanced Controls` runs UI-only gesture checks without relying on webcam recognition.
+- Current live-model transfer analysis is in `docs/live_model_assessment.md`.
 - Live session traces are saved in `artifacts/live_sessions` and summarized with `python -m research_pipeline.cli.summarize_live_session`.
 - Task-level live reports are generated with `python -m research_pipeline.cli.report_live_tasks` and use `configs/interaction/ar_task_scenarios.yaml` for ground-truth action windows.
 - Autonomous task-level AR research benchmark is generated with `python -m research_pipeline.cli.benchmark_c4_tasks --config configs/eval/c4_task_benchmark.yaml` and `python -m research_pipeline.cli.generate_c4_task_assets`.
