@@ -57,8 +57,22 @@ def palm_scale(landmarks: np.ndarray, eps: float = 1e-6) -> np.ndarray:
     return np.maximum(scale, eps).astype(np.float32)
 
 
-def preprocess_dual_view(tensor: LandmarkTensor, target_length: int = 32) -> PreprocessedSequence:
-    """Return pose-normalized and global-motion streams without erasing trajectory."""
+def preprocess_dual_view(
+    tensor: LandmarkTensor,
+    target_length: int = 32,
+    *,
+    include_multiview: bool = False,
+    multiview_coords: int = 2,
+) -> PreprocessedSequence:
+    """Return pose-normalized and global-motion streams without erasing trajectory.
+
+    With ``include_multiview`` the OO-dMVMT multi-view block (Joint Collection
+    Distances plus slow/fast per-joint motion) is appended to the per-frame
+    feature vector. The geometry/motion views run on the first ``multiview_coords``
+    coordinate channels (2 = image xy, which avoids MediaPipe's noisy relative-z).
+    The flag must match between training and inference, so it is recorded in the
+    model artifact and threaded back through the predictors.
+    """
 
     sampled = resample_landmarks(tensor, target_length=target_length)
     landmarks = sampled.landmarks.astype(np.float32)
@@ -78,7 +92,15 @@ def preprocess_dual_view(tensor: LandmarkTensor, target_length: int = 32) -> Pre
     motion = np.concatenate([centroid, wrist_xy, velocity, hand_size, hand_size_delta, confidence], axis=1)
 
     pose_flat = pose.reshape(target_length, -1)
-    features = np.concatenate([pose_flat, motion], axis=1).astype(np.float32)
+    feature_blocks = [pose_flat, motion]
+    if include_multiview:
+        # Local import avoids a circular dependency: multiview imports palm_scale
+        # and resample_landmarks from this module.
+        from research_pipeline.features.multiview import extract_multiview
+
+        multiview = extract_multiview(sampled, target_length=None, normalize=True, coords=multiview_coords)
+        feature_blocks.append(multiview.matrix)
+    features = np.concatenate(feature_blocks, axis=1).astype(np.float32)
     features[~mask] = 0.0
     return PreprocessedSequence(
         pose=pose_flat.astype(np.float32),

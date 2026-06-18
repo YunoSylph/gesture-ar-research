@@ -23,7 +23,7 @@ Backend:
 
 ```powershell
 cd ../..
-.\.venv311\Scripts\Activate.ps1
+.\.venv-gesture-ar\Scripts\Activate.ps1
 python -m research_pipeline.cli.serve_live --host 127.0.0.1 --port 8000
 ```
 

@@ -1,15 +1,22 @@
 .venv/
-.venv311/
+.venv-gesture-ar/
 .vs/
 __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
 .sixth/
-artifacts/
+# Ignore generated artifacts, but keep the small trained model files in git so the
+# repo is self-contained for inference/export on another machine (e.g. the M1 Mac).
+artifacts/*
+!artifacts/models/
+artifacts/models/*
+!artifacts/models/*.pkl
 docs/generated/
 data/raw/
 data/processed/
+# Raw IPN Hand download (~28 GB) — never commit; lives only on the training box.
+IPN_Hand/
 node_modules/
 dist/
 demo/ar_interaction_app/dist/

@@ -17,7 +17,13 @@ from research_pipeline.utils.errors import SchemaError
 from research_pipeline.utils.random import set_global_seed
 
 
-def _load_arrays(manifest_path: str | Path, target_length: int) -> tuple[np.ndarray, np.ndarray]:
+def _load_arrays(
+    manifest_path: str | Path,
+    target_length: int,
+    *,
+    include_multiview: bool = False,
+    multiview_coords: int = 2,
+) -> tuple[np.ndarray, np.ndarray]:
     records = read_jsonl(manifest_path)
     base_dir = Path(manifest_path).parent
     features: list[np.ndarray] = []
@@ -26,7 +32,12 @@ def _load_arrays(manifest_path: str | Path, target_length: int) -> tuple[np.ndar
         if not record.tensor_path:
             raise SchemaError(f"Record '{record.sample_id}' has no tensor_path.")
         tensor = load_landmark_npz(resolve_path(record.tensor_path, base_dir))
-        sequence = preprocess_dual_view(tensor, target_length=target_length)
+        sequence = preprocess_dual_view(
+            tensor,
+            target_length=target_length,
+            include_multiview=include_multiview,
+            multiview_coords=multiview_coords,
+        )
         features.append(sequence.features)
         labels.append(label_to_index(record.target_label))
     if not features:
@@ -212,15 +223,27 @@ def train_tcn(
     focal_gamma: float = 0.0,
     label_smoothing: float = 0.0,
     augmentation: dict | None = None,
+    include_multiview: bool = False,
+    multiview_coords: int = 2,
 ) -> dict:
     torch, nn = require_torch()
     set_global_seed(seed)
 
-    x_np, y_np = _load_arrays(manifest_path, target_length)
+    x_np, y_np = _load_arrays(
+        manifest_path,
+        target_length,
+        include_multiview=include_multiview,
+        multiview_coords=multiview_coords,
+    )
     validation_source = "none"
     if validation_manifest_path:
         train_x_np, train_y_np = x_np, y_np
-        val_x_np, val_y_np = _load_arrays(validation_manifest_path, target_length)
+        val_x_np, val_y_np = _load_arrays(
+            validation_manifest_path,
+            target_length,
+            include_multiview=include_multiview,
+            multiview_coords=multiview_coords,
+        )
         validation_source = str(validation_manifest_path)
     else:
         train_indices, validation_indices = _stratified_validation_indices(
@@ -338,6 +361,12 @@ def train_tcn(
         "target_length": target_length,
         "seed": seed,
         "tcn_config": asdict(config),
+        "features": {
+            "feature_set": "dual_view_multiview" if include_multiview else "dual_view",
+            "include_multiview": bool(include_multiview),
+            "multiview_coords": int(multiview_coords),
+            "input_dim": int(config.input_dim),
+        },
         "state_dict": state_dict,
         "history": history,
         "training": {

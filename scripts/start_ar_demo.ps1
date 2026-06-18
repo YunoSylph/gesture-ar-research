@@ -2,7 +2,8 @@ param(
   [int]$BackendPort = 8000,
   [int[]]$FrontendPorts = @(5173, 5174, 5175, 5176, 5177, 5178, 5179),
   [switch]$NoBrowser,
-  [switch]$Restart
+  [switch]$Restart,
+  [switch]$SkipInstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Split-Path -Parent $ScriptDir
 $AppDir = Join-Path $Root "demo\ar_interaction_app"
-$Python = Join-Path $Root ".venv311\Scripts\python.exe"
+$Python = Join-Path $Root ".venv-gesture-ar\Scripts\python.exe"
 $Requirements = Join-Path $Root "requirements\live.txt"
 $LogDir = Join-Path $Root "artifacts\logs"
 
@@ -48,16 +49,19 @@ function Wait-Http {
 }
 
 if (-not (Test-Path $Python)) {
+  if ($SkipInstall) {
+    throw "Quick start: environment .venv-gesture-ar is missing. Run a full setup first (start_ar_demo.ps1 without -SkipInstall)."
+  }
   $systemPython = Get-Command py -ErrorAction SilentlyContinue
   if ($systemPython) {
-    & py -3.11 -m venv (Join-Path $Root ".venv311")
+    & py -3.11 -m venv (Join-Path $Root ".venv-gesture-ar")
   }
   if (-not (Test-Path $Python)) {
     $systemPython = Get-Command python -ErrorAction SilentlyContinue
     if (-not $systemPython) {
       throw "Python 3.11+ was not found. Install Python and rerun this script."
     }
-    & python -m venv (Join-Path $Root ".venv311")
+    & python -m venv (Join-Path $Root ".venv-gesture-ar")
   }
 }
 
@@ -65,7 +69,7 @@ if (-not (Test-Path $Python)) {
   throw "Python environment could not be created: $Python"
 }
 
-if (Test-Path $Requirements) {
+if (-not $SkipInstall -and (Test-Path $Requirements)) {
   & $Python -m pip install --upgrade pip
   & $Python -m pip install -r $Requirements
 }

@@ -227,6 +227,27 @@ Minimum requirements:
 
 Live demo claims should be phrased as engineering validation and qualitative failure analysis unless annotated ground truth is available.
 
+### Reproducible aggregation (implemented)
+
+A single session is noisy and not reproducible, so live evidence is aggregated over a *set* of
+sessions into the same action-level metrics as the replay. Run the protocol as follows:
+
+1. Run N sessions per task (recommended N >= 5) with a fixed task scenario, logging one JSONL per
+   session into `artifacts/live_sessions/`.
+2. Provide a task-scenario JSON so each session can be scored against ground-truth expected actions
+   (`expected_actions` with `target_ms`/`required`); without it only session-quality metrics
+   aggregate.
+3. Aggregate:
+   `python -m research_pipeline.cli.aggregate_live_sessions --scenarios <scenarios.json>`.
+
+`research_pipeline/evaluation/live_protocol.py` (`aggregate_session_reports`) produces, over the
+session set: per-task task-success rate, mean cost-weighted action precision/recall, required-action
+recall, median decision latency, and pooled session quality (FPS, p95 processing latency, detection
+coverage, confidence), plus an overall summary and the number of scored task runs. This makes live
+behaviour a trackable, reproducible measurement that *complements* the replay ablation; it does not
+replace it, and the replay ablation remains the primary thesis proof until annotated live sessions
+are collected at scale.
+
 ## Current Gaps To Close
 
 - No complete Level B evaluator currently computes onset/offset error, segment-level F1, false positives per minute, and label switch rate.
@@ -234,7 +255,7 @@ Live demo claims should be phrased as engineering validation and qualitative fai
 - The gesture guide must be aligned with `docs/gesture_contract.md`.
 - UI task sequences and backend task scenario definitions must be aligned before live task metrics are interpreted.
 - Zoom semantics are not fully aligned between IPN labels, UI guidance, and live scale-change logic.
-- The live demo should not be used as the primary proof until annotated live sessions exist.
+- The live demo should not be used as the primary proof until annotated live sessions exist; the reproducible aggregation tooling now exists (`cli/aggregate_live_sessions`), but the annotated sessions themselves still need to be collected at scale.
 
 ## Reporting Template
 

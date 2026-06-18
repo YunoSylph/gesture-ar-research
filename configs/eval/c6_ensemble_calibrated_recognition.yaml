@@ -60,6 +60,9 @@ objective:
   weak_labels: [click_2f, swipe_left, zoom_out]
   weak_f1_weight: 0.05
   false_action_penalty: 0.20
+  # Penalise expected calibration error in the safety objective so the selected
+  # deployment config does not trade probability calibration for raw macro F1.
+  ece_penalty: 0.5
 
 grid:
   c3_weight: [0.0, 0.15, 0.35, 0.55, 0.80]

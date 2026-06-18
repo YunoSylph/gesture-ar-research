@@ -744,6 +744,39 @@ p {
   background: #10171b;
 }
 
+.gesture-clip {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(127, 182, 200, 0.28);
+  border-radius: 8px;
+  background: #10171b;
+}
+
+.gesture-clip-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gesture-clip-tag {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(156, 241, 139, 0.4);
+  background: rgba(16, 23, 27, 0.8);
+  color: #b6f3a6;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .gesture-pose.compact {
   width: 66px;
   height: 72px;
@@ -930,19 +963,67 @@ p {
   transform: rotate(135deg);
 }
 
-.gesture-pose.zoom_in .pose-hand,
-.gesture-pose.zoom_out .pose-hand {
-  animation: zoomHand 1.35s ease-in-out infinite;
+/* Zoom is a thumb-index pinch, not a whole-hand scale: the spare fingers curl in
+   and only the thumb/index gap opens (zoom in) or closes (zoom out). */
+.gesture-pose.zoom_in .pose-hand .middle,
+.gesture-pose.zoom_out .pose-hand .middle {
+  height: 30px;
+  transform: rotate(12deg);
 }
 
-.gesture-pose.zoom_out .pose-hand {
+.gesture-pose.zoom_in .pose-hand .ring,
+.gesture-pose.zoom_out .pose-hand .ring,
+.gesture-pose.zoom_in .pose-hand .pinky,
+.gesture-pose.zoom_out .pose-hand .pinky {
+  height: 20px;
+  transform: rotate(16deg);
+}
+
+.gesture-pose.zoom_in .pose-hand .thumb,
+.gesture-pose.zoom_out .pose-hand .thumb {
+  animation: pinchThumb 1.5s ease-in-out infinite;
+}
+
+.gesture-pose.zoom_in .pose-hand .index,
+.gesture-pose.zoom_out .pose-hand .index {
+  transform-origin: 50% 100%;
+  animation: pinchIndex 1.5s ease-in-out infinite;
+}
+
+/* zoom_out runs the same pinch in reverse so it reads as closing the gap. */
+.gesture-pose.zoom_out .pose-hand .thumb,
+.gesture-pose.zoom_out .pose-hand .index {
   animation-direction: reverse;
 }
 
+/* Spark at the pinch point between the thumb and index tips. */
+.gesture-pose.zoom_in .pose-touch,
+.gesture-pose.zoom_out .pose-touch {
+  position: absolute;
+  left: 24%;
+  top: 20px;
+  display: block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #f0d996;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  animation: pinchSpark 1.5s ease-in-out infinite;
+}
+
+.gesture-pose.zoom_out .pose-touch {
+  animation-direction: reverse;
+}
+
+/* The orbit echoes the action: it grows on zoom in and shrinks on zoom out. */
 .gesture-pose.zoom_in .pose-orbit,
 .gesture-pose.zoom_out .pose-orbit {
   border-color: rgba(240, 217, 150, 0.58);
-  animation: zoomOrbit 1.35s ease-in-out infinite;
+  animation: zoomOrbit 1.5s ease-in-out infinite;
+}
+
+.gesture-pose.zoom_out .pose-orbit {
+  animation-direction: reverse;
 }
 
 @keyframes clickIndex {
@@ -1005,13 +1086,37 @@ p {
   }
 }
 
-@keyframes zoomHand {
+/* Thumb swings out and up, opening the pinch gap (zoom in); reversed for zoom out. */
+@keyframes pinchThumb {
   0%,
   100% {
-    transform: translate(-50%, -50%) scale(0.78);
+    transform: rotate(-20deg) translate(6px, -11px);
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.08);
+    transform: rotate(-44deg) translate(0, 0);
+  }
+}
+
+/* Index tilts toward the thumb to close the gap, then straightens to open it. */
+@keyframes pinchIndex {
+  0%,
+  100% {
+    transform: rotate(2deg) translate(0, 0);
+  }
+  50% {
+    transform: rotate(20deg) translate(-3px, 2px);
+  }
+}
+
+@keyframes pinchSpark {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.25);
+  }
+  50% {
+    opacity: 0.3;
+    transform: translateX(-50%) scale(0.55);
   }
 }
 
@@ -1022,7 +1127,7 @@ p {
     opacity: 0.45;
   }
   50% {
-    transform: scale(1.02);
+    transform: scale(1.05);
     opacity: 1;
   }
 }
@@ -1142,6 +1247,23 @@ p {
   font-size: 12px;
 }
 
+.ar-hand-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ar-hand-skeleton .bone {
+  stroke: rgba(156, 241, 139, 0.82);
+  stroke-width: 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(156, 241, 139, 0.5));
+}
+
 .ar-landmark-dot {
   position: absolute;
   z-index: 2;
@@ -1153,6 +1275,13 @@ p {
   background: #9cf18b;
   box-shadow: 0 0 14px rgba(156, 241, 139, 0.78);
   pointer-events: none;
+}
+
+.ar-landmark-dot.tip {
+  width: 11px;
+  height: 11px;
+  background: #f2fffd;
+  box-shadow: 0 0 16px rgba(156, 241, 139, 0.95);
 }
 
 .ar-pointer-reticle {
@@ -1171,6 +1300,35 @@ p {
     0 0 0 5px rgba(114, 211, 201, 0.18),
     0 0 22px rgba(114, 211, 201, 0.7);
   pointer-events: none;
+}
+
+.lock-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+}
+
+.lock-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 3;
+}
+
+.lock-ring-fill {
+  fill: none;
+  stroke: #9cf18b;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 80ms linear;
+}
+
+.lock-ring.locked .lock-ring-fill {
+  stroke: #7ef0ff;
+  filter: drop-shadow(0 0 6px rgba(126, 240, 255, 0.85));
 }
 
 .ar-pointer-reticle::after {
@@ -1790,6 +1948,14 @@ p,
   border-color: #dce5ec;
   background: #ffffff;
   box-shadow: 0 12px 34px rgba(24, 38, 54, 0.07);
+}
+
+/* The summary metric cells keep a dark fill in the base theme; re-light them here
+   so the dark light-theme dd text is not rendered dark-on-dark. */
+.hybrid-summary dl div,
+.official-summary dl div {
+  border-color: #dce5ec;
+  background: #f3f7fb;
 }
 
 .panel-title,

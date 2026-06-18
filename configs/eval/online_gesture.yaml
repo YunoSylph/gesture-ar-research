@@ -7,8 +7,8 @@ predictor:
   fallback: rule_based
   c6:
     model_paths:
-      - artifacts/models/ipn_c1t_tcn_full_validated.pkl
-      - artifacts/models/ipn_c1t_tcn_augmented.pkl
+      - artifacts/models/ipn_c1t_tcn_full_validated_mv.pkl
+      - artifacts/models/ipn_c1t_tcn_augmented_mv.pkl
     hybrid:
       neural_weight: 0.96
       geometry_weight: 0.08
@@ -22,8 +22,8 @@ predictor:
       zoom_delta_min: 0.035
       click_distance_max: 0.075
     calibration:
-      c3_weight: 0.15
-      temperature: 1.25
+      c3_weight: 0.0
+      temperature: 0.8
       min_action_confidence: 0.0
       min_action_margin: 0.0
       label_biases:
@@ -45,7 +45,12 @@ pseudo_continuous:
 
 task_replay:
   enabled: true
-  trials_per_task: 1
+  trials_per_task: 8
+  # "Confident completion" threshold tau: a task counts as completed when its graded
+  # completion score (F1 of weighted action precision/recall) clears this bar. Reported
+  # as confident_completion_rate, the headline task metric instead of the floor-effect
+  # strict binary success.
+  completion_threshold: 0.5
   tasks:
     - object_control
     - scroll_open

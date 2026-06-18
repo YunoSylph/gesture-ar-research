@@ -1,0 +1,21 @@
+{
+  "object": {
+    "id": "object",
+    "label": "Object control",
+    "expected_actions": [
+      {"id": "hover", "action": "pointer_hover", "start_ms": 0, "end_ms": 600000, "target_ms": 4000, "required": false},
+      {"id": "select", "action": "select_confirm", "start_ms": 0, "end_ms": 600000, "target_ms": 12000, "required": true},
+      {"id": "zoom_in", "action": "zoom_in", "start_ms": 0, "end_ms": 600000, "target_ms": 24000, "required": true},
+      {"id": "zoom_out", "action": "zoom_out", "start_ms": 0, "end_ms": 600000, "target_ms": 36000, "required": true}
+    ]
+  },
+  "scroll": {
+    "id": "scroll",
+    "label": "Scroll and open",
+    "expected_actions": [
+      {"id": "next_1", "action": "navigate_next", "start_ms": 0, "end_ms": 600000, "target_ms": 8000, "required": true},
+      {"id": "prev_1", "action": "navigate_previous", "start_ms": 0, "end_ms": 600000, "target_ms": 20000, "required": true},
+      {"id": "open", "action": "select_confirm", "start_ms": 0, "end_ms": 600000, "target_ms": 32000, "required": false}
+    ]
+  }
+}

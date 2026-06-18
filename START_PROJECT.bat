@@ -3,7 +3,7 @@ setlocal EnableExtensions
 
 set "ROOT=%~dp0"
 set "APP_DIR=%ROOT%demo\ar_interaction_app"
-set "VENV_DIR=%ROOT%.venv311"
+set "VENV_DIR=%ROOT%.venv-gesture-ar"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "BACKEND_URL=http://127.0.0.1:8000/api/health"
 set "FRONTEND_URL=http://127.0.0.1:5173/"
@@ -57,7 +57,7 @@ if not exist "%VENV_PY%" (
 )
 
 if not exist "%VENV_PY%" (
-  echo ERROR: Could not create .venv311. Install Python 3.11 and run this file again.
+  echo ERROR: Could not create .venv-gesture-ar. Install Python 3.11 and run this file again.
   exit /b 1
 )
 
@@ -71,7 +71,7 @@ if errorlevel 1 (
   if errorlevel 1 (
     echo.
     echo ERROR: Python dependencies failed to install.
-    echo If the error mentions mediapipe, install Python 3.11, delete .venv311, and run START_PROJECT.bat again.
+    echo If the error mentions mediapipe, install Python 3.11, delete .venv-gesture-ar, and run START_PROJECT.bat again.
     exit /b 1
   )
 )

@@ -40,11 +40,16 @@ class TaskScenario:
         return payload
 
 
+DEFAULT_COMPLETION_THRESHOLD = 0.5
+
+
 @dataclass(slots=True)
 class TaskReplayResult:
     task_id: str
     task_label: str
     task_success: bool
+    confident_completion: bool
+    task_completion_score: float
     accepted_actions: int
     rejected_actions: int
     expected_actions: int
@@ -115,7 +120,12 @@ def default_task_scenarios(action_costs: dict[str, float] | None = None) -> dict
     }
 
 
-def evaluate_task_replay(events: list[OnlineEvent], scenario: TaskScenario) -> TaskReplayResult:
+def evaluate_task_replay(
+    events: list[OnlineEvent],
+    scenario: TaskScenario,
+    *,
+    completion_threshold: float = DEFAULT_COMPLETION_THRESHOLD,
+) -> TaskReplayResult:
     accepted = [event for event in events if event.action_accepted and event.final_action and event.final_action != "idle"]
     rejected = [
         event
@@ -155,11 +165,23 @@ def evaluate_task_replay(events: list[OnlineEvent], scenario: TaskScenario) -> T
     precision = matched_cost / (matched_cost + false_cost) if matched_cost + false_cost else 0.0
     recall = matched_cost / expected_cost if expected_cost else 0.0
     success = not missed_steps and false_cost <= scenario.max_false_action_cost
+    # Graded counterpart to the binary `task_success`: the strict criterion has a
+    # zero false-action tolerance, so on noisy replay it collapses to a floor.
+    # The completion score is the F1 of the cost-weighted action precision and
+    # recall, so partial progress and clean-but-imperfect runs score continuously.
+    completion = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
+    # "Confident completion" is the headline task metric: the strict binary success has a
+    # zero false-action tolerance and floors out, so a task counts as completed when the
+    # graded completion score clears a threshold instead. It rewards getting the steps done
+    # with mostly-correct action cost, without requiring a perfectly clean run.
+    confident_completion = completion >= completion_threshold
 
     return TaskReplayResult(
         task_id=scenario.id,
         task_label=scenario.label,
         task_success=success,
+        confident_completion=confident_completion,
+        task_completion_score=completion,
         accepted_actions=len(accepted),
         rejected_actions=len(rejected),
         expected_actions=len(expected_steps),
@@ -174,7 +196,12 @@ def evaluate_task_replay(events: list[OnlineEvent], scenario: TaskScenario) -> T
     )
 
 
-def evaluate_task_set(events: Iterable[OnlineEvent], scenarios: dict[str, TaskScenario]) -> dict[str, Any]:
+def evaluate_task_set(
+    events: Iterable[OnlineEvent],
+    scenarios: dict[str, TaskScenario],
+    *,
+    completion_threshold: float = DEFAULT_COMPLETION_THRESHOLD,
+) -> dict[str, Any]:
     by_task: dict[tuple[str, str], list[OnlineEvent]] = {}
     for event in events:
         if event.task_id:
@@ -185,7 +212,7 @@ def evaluate_task_set(events: Iterable[OnlineEvent], scenarios: dict[str, TaskSc
         scenario = scenarios.get(task_id)
         if scenario is None:
             continue
-        results.append(evaluate_task_replay(task_events, scenario))
+        results.append(evaluate_task_replay(task_events, scenario, completion_threshold=completion_threshold))
 
     rows = [result.to_dict() for result in results]
     count = len(rows)
@@ -193,7 +220,10 @@ def evaluate_task_set(events: Iterable[OnlineEvent], scenarios: dict[str, TaskSc
         "tasks": rows,
         "summary": {
             "task_count": count,
+            "completion_threshold": float(completion_threshold),
             "task_success_rate": sum(1.0 for row in rows if row["task_success"]) / count if count else 0.0,
+            "confident_completion_rate": sum(1.0 for row in rows if row["confident_completion"]) / count if count else 0.0,
+            "task_completion_score": _mean([float(row["task_completion_score"]) for row in rows]),
             "accepted_actions": sum(int(row["accepted_actions"]) for row in rows),
             "rejected_actions": sum(int(row["rejected_actions"]) for row in rows),
             "false_action_cost": sum(float(row["false_action_cost"]) for row in rows),

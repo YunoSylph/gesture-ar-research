@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gesture session - order to perform</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px;
+    background: #0f1317; color: #edf1f3;
+    font-family: "Segoe UI", Inter, Arial, sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: #9aabb2; font-size: 13px; margin: 0 0 20px; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; }
+  .card {
+    width: 268px; border: 1px solid #2b3640; border-radius: 12px;
+    background: #182027; padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .step { color: #7fb6c8; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .name { font-size: 18px; font-weight: 700; }
+  .media { width: 100%; height: 200px; border-radius: 10px; background: #10171b; object-fit: cover; display: block; }
+  .action { color: #9cf18b; font-size: 13px; font-weight: 700; }
+  .cue { color: #aab8bd; font-size: 12px; line-height: 1.35; min-height: 34px; }
+  .tips { margin-top: 22px; color: #aab8bd; font-size: 13px; line-height: 1.5; max-width: 760px; }
+  .tips b { color: #f0d996; }
+  .arrow { align-self: center; color: #54636c; font-size: 26px; }
+</style>
+</head>
+<body>
+  <h1>Gesture session - perform in this order</h1>
+  <p class="lead">Object control task. Return your hand to neutral (open, relaxed) for ~2 seconds between each step.</p>
+
+  <div class="row">
+    <div class="card">
+      <span class="step">Step 1</span>
+      <span class="name">Point</span>
+      <video class="media" src="1_point.mp4" autoplay loop muted playsinline></video>
+      <span class="action">&rarr; pointer_hover</span>
+      <span class="cue">Two-finger point at the object and hold briefly.</span>
+    </div>
+
+    <div class="card">
+      <span class="step">Step 2</span>
+      <span class="name">Click</span>
+      <video class="media" src="2_click.mp4" autoplay loop muted playsinline></video>
+      <span class="action">&rarr; select_confirm</span>
+      <span class="cue">Two-finger click (index + middle) to select.</span>
+    </div>
+
+    <div class="card">
+      <span class="step">Step 3</span>
+      <span class="name">Zoom in</span>
+      <img class="media" src="3_zoom_in_pinch.svg" alt="pinch open">
+      <span class="action">&rarr; zoom_in</span>
+      <span class="cue">Spread thumb and index apart (pinch open). Keep the hand still.</span>
+    </div>
+
+    <div class="card">
+      <span class="step">Step 4</span>
+      <span class="name">Zoom out</span>
+      <img class="media" src="4_zoom_out_pinch.svg" alt="pinch close">
+      <span class="action">&rarr; zoom_out</span>
+      <span class="cue">Bring thumb and index together (pinch close). Keep the hand still.</span>
+    </div>
+  </div>
+
+  <div class="tips">
+    <p><b>How to record:</b> in the app pick Webcam + Robust C6 + Object control task, press Start Task, then do steps 1&rarr;2&rarr;3&rarr;4. Stop, and repeat for 3-5 separate sessions.</p>
+    <p><b>For clean numbers:</b> sit facing a light source and keep your whole hand in frame at medium distance - on earlier logs half the frames lost the hand. Do one gesture at a time, pausing in neutral between them.</p>
+    <p><b>Note:</b> steps 1-2 are real IPN reference clips; steps 3-4 are the thumb-index pinch the live controller actually uses (the dataset zoom clip moved the whole hand and no longer matches).</p>
+  </div>
+</body>
+</html>

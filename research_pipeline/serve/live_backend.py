@@ -24,6 +24,7 @@ from research_pipeline.features.preprocessing import clip_feature_summary, palm_
 from research_pipeline.interaction.action_safe import ActionSafePolicy, ActionSafePolicyConfig
 from research_pipeline.interaction.fsm import ACTION_BY_LABEL, ContextAwarePolicy, ContextPolicyConfig
 from research_pipeline.interaction.gesture_validation import GestureValidationLayer
+from research_pipeline.interaction.stabilizer import TemporalLabelStabilizer, TemporalStabilizerConfig
 from research_pipeline.interaction.task_aware import TaskAwareActionSafePolicy, TaskAwarePolicyConfig, load_task_scenarios
 from research_pipeline.labels import TARGET_LABELS
 from research_pipeline.models.calibrated import CalibratedFusionConfig, calibrated_fusion_prediction
@@ -38,8 +39,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_METHOD_ARTIFACTS = {
     "c1_rf": PROJECT_ROOT / "artifacts/models/ipn_c1_rf_full.pkl",
     "c1t_tcn": PROJECT_ROOT / "artifacts/models/ipn_c1t_tcn_full.pkl",
-    "c1t_tcn_validated": PROJECT_ROOT / "artifacts/models/ipn_c1t_tcn_full_validated.pkl",
-    "c1t_tcn_augmented": PROJECT_ROOT / "artifacts/models/ipn_c1t_tcn_augmented.pkl",
+    "c1t_tcn_validated": PROJECT_ROOT / "artifacts/models/ipn_c1t_tcn_full_validated_mv.pkl",
+    "c1t_tcn_augmented": PROJECT_ROOT / "artifacts/models/ipn_c1t_tcn_augmented_mv.pkl",
     "onnx": PROJECT_ROOT / "artifacts/export/ipn_c1t_tcn_full.onnx",
 }
 DEFAULT_LIVE_HYBRID_CONFIG = HybridConfig(
@@ -289,10 +290,13 @@ class FrameLandmarker:
         self.detector = vision.HandLandmarker.create_from_options(options)
         self._timestamp_ms = 0
 
-    def detect(self, frame: np.ndarray) -> tuple[np.ndarray, bool, float]:
+    def detect(self, frame: np.ndarray, timestamp_ms: int | None = None) -> tuple[np.ndarray, bool, float]:
         rgb = self.cv2.cvtColor(frame, self.cv2.COLOR_BGR2RGB)
         image = self.mp.Image(image_format=self.mp.ImageFormat.SRGB, data=rgb)
-        self._timestamp_ms = max(self._timestamp_ms + 1, int(time.perf_counter() * 1000))
+        # Live capture uses a wall-clock timestamp; offline tools can pass a
+        # frame-based timestamp so MediaPipe video tracking is deterministic.
+        source_ms = int(time.perf_counter() * 1000) if timestamp_ms is None else int(timestamp_ms)
+        self._timestamp_ms = max(self._timestamp_ms + 1, source_ms)
         result = self.detector.detect_for_video(image, self._timestamp_ms)
         if not result.hand_landmarks:
             return np.zeros((21, 3), dtype=np.float32), False, 0.0
@@ -745,10 +749,24 @@ class LiveLandmarkGestureController:
     as a logged research signal.
     """
 
+    # Geometry thresholds, normalized by palm scale. Calibrated from real webcam
+    # diagnostics: a two-finger point holds the index-middle gap near ~0.33 and a
+    # click brings it under ~0.20; the thumb-index gap is ~1.0 open and ~0.15 when
+    # pinched. Zoom is detected as an absolute open<->closed pinch transition with
+    # hysteresis (not a noisy per-window delta), which is what makes zoom-in and
+    # zoom-out cleanly distinguishable.
+    CLICK_ARM_RATIO = 0.30
+    CLICK_FIRE_RATIO = 0.22
+    PINCH_OPEN_GAP = 0.85
+    PINCH_CLOSED_GAP = 0.40
+
     def __init__(self, *, window_size: int = 14):
         self.window_size = window_size
         self.frame_index = 0
         self.click_armed = False
+        self.pinch_state = "unknown"
+        self._dbg_ti_gap = 0.0
+        self._dbg_im_gap = 0.0
         self.candidate_label = ""
         self.candidate_frames = 0
         self.locked_label = ""
@@ -781,20 +799,42 @@ class LiveLandmarkGestureController:
         stats = self._stats(tensor)
         if stats["valid_ratio"] < 0.42 or stats["valid_frames"] < 3 or stats["confidence"] < 0.35:
             self.click_armed = False
+            self.pinch_state = "unknown"
             self._reset_candidate()
             self.last_context = self._context("no_hand", "", expected, 0.0, 0)
             return self._scores("no_gesture", 0.96, model_prediction)
 
-        if stats["click_open_ratio_recent"] > 0.64:
+        self._dbg_ti_gap = float(stats["thumb_index_gap"])
+        self._dbg_im_gap = float(stats["click_close_ratio_min"])
+        # Click arms once the index-middle pair is opened into a point pose, then
+        # fires when the pair is squeezed together; both thresholds are well inside
+        # the measured point (~0.33) vs click (~0.18) range so a steady point never
+        # trips a click.
+        if stats["click_open_ratio_recent"] > self.CLICK_ARM_RATIO:
             self.click_armed = True
+
+        # Track the absolute thumb-index pinch state with hysteresis. A transition
+        # from open to closed is a zoom-out (fingers pinched together); closed to
+        # open is a zoom-in (fingers spread apart). Using the absolute gap instead
+        # of a per-window delta is what makes the two directions distinguishable.
+        previous_pinch = self.pinch_state
+        if stats["thumb_index_gap"] <= self.PINCH_CLOSED_GAP:
+            self.pinch_state = "closed"
+        elif stats["thumb_index_gap"] >= self.PINCH_OPEN_GAP:
+            self.pinch_state = "open"
+        zoom_event = ""
+        if previous_pinch == "open" and self.pinch_state == "closed":
+            zoom_event = "zoom_out"
+        elif previous_pinch == "closed" and self.pinch_state == "open":
+            zoom_event = "zoom_in"
 
         candidate = ""
         progress = 0.0
         if stats["samples"] >= 7:
             if not expected or expected == "click_2f":
-                click_threshold = 0.46
-                click_progress = float(np.clip((0.64 - stats["click_close_ratio_min"]) / max(1e-6, 0.64 - click_threshold), 0.0, 1.0))
-                if self.click_armed and stats["click_close_ratio_min"] <= click_threshold and stats["motion"] < 0.09:
+                click_span = max(1e-6, self.CLICK_ARM_RATIO - self.CLICK_FIRE_RATIO)
+                click_progress = float(np.clip((self.CLICK_ARM_RATIO - stats["click_close_ratio_min"]) / click_span, 0.0, 1.0))
+                if self.click_armed and stats["click_close_ratio_min"] <= self.CLICK_FIRE_RATIO and stats["motion"] < 0.12:
                     candidate, progress = "click_2f", click_progress
 
             swipe_threshold = max(0.16, stats["jitter"] * 3.8)
@@ -806,13 +846,9 @@ class LiveLandmarkGestureController:
                     candidate = label
                     progress = float(np.clip(abs(stats["dx"]) / swipe_threshold, 0.0, 1.0))
 
-            zoom_threshold = 0.20
-            zoom_motion = abs(stats["scale_delta_ratio"]) > zoom_threshold and abs(stats["scale_delta_ratio"]) > stats["scale_noise"] * 2.0
-            if (not candidate) and zoom_motion and stats["motion"] < 0.18:
-                label = "zoom_in" if stats["scale_delta_ratio"] > 0 else "zoom_out"
-                if not expected or expected == label:
-                    candidate = label
-                    progress = float(np.clip(abs(stats["scale_delta_ratio"]) / zoom_threshold, 0.0, 1.0))
+            if (not candidate) and zoom_event and (not expected or expected == zoom_event):
+                candidate = zoom_event
+                progress = 1.0
 
         if candidate:
             if not self._ready(candidate, self._cooldown_frames(candidate)):
@@ -858,7 +894,11 @@ class LiveLandmarkGestureController:
         self.candidate_frames = 0
 
     def _required_frames(self, label: str) -> int:
-        return 2 if label in {"click_2f", "swipe_left", "swipe_right", "zoom_in", "zoom_out"} else 1
+        # Zoom is a single decisive open<->closed pinch transition, so one frame is
+        # enough; click and swipe still need a short stable run to debounce.
+        if label in {"zoom_in", "zoom_out"}:
+            return 1
+        return 2 if label in {"click_2f", "swipe_left", "swipe_right"} else 1
 
     def _hold_frames(self, label: str) -> int:
         return 5 if label == "click_2f" else 4
@@ -875,6 +915,9 @@ class LiveLandmarkGestureController:
             "stable_frames": int(self.candidate_frames),
             "required_frames": int(required_frames),
             "click_armed": bool(self.click_armed),
+            "pinch_state": self.pinch_state,
+            "thumb_index_gap": round(self._dbg_ti_gap, 3),
+            "index_middle_gap": round(self._dbg_im_gap, 3),
         }
 
     def _scores(self, label: str, confidence: float, model_prediction: Prediction) -> Prediction:
@@ -906,6 +949,9 @@ class LiveLandmarkGestureController:
                 "jitter": 0.0,
                 "scale_delta_ratio": 0.0,
                 "scale_noise": 1.0,
+                "pinch_delta_ratio": 0.0,
+                "pinch_noise": 1.0,
+                "thumb_index_gap": 1.0,
                 "click_close_ratio_min": 1.0,
                 "click_open_ratio_recent": 1.0,
             }
@@ -932,8 +978,18 @@ class LiveLandmarkGestureController:
         scale_noise = float(np.std(scales) / max(float(np.mean(scales)), 1e-6))
         index_middle_ratio = np.linalg.norm(index_tip - middle_tip, axis=1) / scales
         thumb_index_ratio = np.linalg.norm(thumb_tip - index_tip, axis=1) / scales
-        click_close_ratio = np.minimum(index_middle_ratio, thumb_index_ratio)
-        click_open_ratio = np.minimum(index_middle_ratio, thumb_index_ratio)
+        # Click is a two-finger (index+middle) tap; zoom is a thumb-index pinch.
+        # Keeping them on different finger pairs prevents one from triggering the
+        # other, so a pinch never registers as a click and vice versa.
+        click_close_ratio = index_middle_ratio
+        click_open_ratio = index_middle_ratio
+        # Pinch-to-zoom signal: change of the thumb-index gap over the window.
+        # Spreading the fingers (positive delta) zooms in, pinching them (negative)
+        # zooms out. The delta is used so a static pinch pose does not trigger zoom.
+        ti_start = float(np.median(thumb_index_ratio[:edge]))
+        ti_end = float(np.median(thumb_index_ratio[-edge:]))
+        pinch_delta_ratio = (ti_end - ti_start) / max(ti_start, 1e-6)
+        pinch_noise = float(np.std(thumb_index_ratio) / max(float(np.mean(thumb_index_ratio)), 1e-6))
         # Wrist motion helps avoid interpreting a whole-hand translation as a click.
         wrist_motion = float(np.linalg.norm(np.median(wrist[-edge:], axis=0) - np.median(wrist[:edge], axis=0)))
         return {
@@ -947,6 +1003,9 @@ class LiveLandmarkGestureController:
             "jitter": jitter,
             "scale_delta_ratio": float(scale_delta_ratio),
             "scale_noise": scale_noise,
+            "pinch_delta_ratio": float(pinch_delta_ratio),
+            "pinch_noise": pinch_noise,
+            "thumb_index_gap": float(np.median(thumb_index_ratio[-edge:])),
             "click_close_ratio_min": float(np.min(click_close_ratio)),
             "click_open_ratio_recent": float(np.median(click_open_ratio[-edge:])),
         }
@@ -1079,6 +1138,10 @@ async def stream_webcam(
 
     window: deque[tuple[np.ndarray, bool, float]] = deque(maxlen=32)
     live_controller = LiveLandmarkGestureController()
+    # Label-level majority vote smooths residual frame-to-frame flicker in the
+    # continuous tracking state; locked command frames bypass it so discrete
+    # gestures (click/swipe/zoom) are never delayed or dropped.
+    live_stabilizer = TemporalLabelStabilizer(TemporalStabilizerConfig(window=5, enter_fraction=0.4, sticky=True))
     validation_layer = GestureValidationLayer()
     start = time.perf_counter()
     frame_times: deque[float] = deque(maxlen=30)
@@ -1100,13 +1163,18 @@ async def stream_webcam(
             current_policy_context = policy_context(policy)
             expected_label = str(current_policy_context.get("expected_label", "")) if current_policy_context else ""
             controller_prediction = live_controller.update(model_prediction, tensor, expected_label=expected_label)
+            control_ctx = live_controller.context()
+            stabilized = live_stabilizer.update_prediction(controller_prediction)
+            # Locked frames are the controller's fixation signal -> pass them through so
+            # discrete command gestures are never damped or delayed by the smoother.
+            stabilized_prediction = controller_prediction if control_ctx.get("mode") == "locked" else stabilized
             timestamp_ms = int((time.perf_counter() - start) * 1000)
             validation = validation_layer.update_prediction(
-                controller_prediction,
+                stabilized_prediction,
                 timestamp_ms=timestamp_ms,
                 frame_index=frame_index,
                 expected_label=expected_label,
-                landmark_stats=live_controller.context(),
+                landmark_stats=control_ctx,
             )
             prediction = validation.to_prediction()
             event = None if policy is None else policy_event(policy, prediction, timestamp_ms)
@@ -1148,6 +1216,7 @@ async def stream_webcam(
                     "model_confidence": model_prediction.confidence,
                     "controller_gesture": controller_prediction.label,
                     "controller_confidence": controller_prediction.confidence,
+                    "stabilized_gesture": stabilized_prediction.label,
                 },
             )
             await websocket.send_json(payload)

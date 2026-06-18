@@ -29,10 +29,23 @@ def load_artifact(path: str | Path) -> dict[str, Any]:
     return artifact
 
 
+def artifact_feature_flags(artifact: dict[str, Any]) -> tuple[bool, int]:
+    """Read the feature-set flags an artifact was trained with (default dual-view)."""
+
+    features_cfg = artifact.get("features", {})
+    return bool(features_cfg.get("include_multiview", False)), int(features_cfg.get("multiview_coords", 2))
+
+
 def predict_with_artifact(artifact: dict[str, Any], tensor: LandmarkTensor) -> Prediction:
     model_type = artifact["model_type"]
     target_length = int(artifact.get("target_length", 32))
-    sequence = preprocess_dual_view(tensor, target_length=target_length)
+    include_multiview, multiview_coords = artifact_feature_flags(artifact)
+    sequence = preprocess_dual_view(
+        tensor,
+        target_length=target_length,
+        include_multiview=include_multiview,
+        multiview_coords=multiview_coords,
+    )
 
     if model_type == "c0_rule":
         recognizer = RuleBasedRecognizer(**artifact.get("params", {}))

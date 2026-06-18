@@ -129,3 +129,26 @@ def test_tarc_only_receives_ready_or_locked_proposal() -> None:
 
     assert first.is_ready_for_tarc is False
     assert second.is_ready_for_tarc is True
+
+
+def test_global_release_blocks_new_command_until_release() -> None:
+    from research_pipeline.interaction.gesture_validation import GestureValidationConfig
+
+    controller = GestureValidationLayer(GestureValidationConfig(require_global_release=True))
+    click = prediction_from_scores({"click_2f": 1.0})
+    controller.update_prediction(click, timestamp_ms=0)
+    accepted = controller.update_prediction(click, timestamp_ms=100)
+    assert accepted.accepted is True
+
+    # A different command after the lock/cooldown window is still blocked until release.
+    swipe = prediction_from_scores({"swipe_right": 1.0})
+    blocked = controller.update_prediction(swipe, timestamp_ms=400)
+    blocked_again = controller.update_prediction(swipe, timestamp_ms=500)
+    assert blocked.accepted is False and blocked.rejection_reason == "awaiting_release"
+    assert blocked_again.accepted is False
+
+    # A no_gesture release re-arms the layer; the next command can then be accepted.
+    controller.update_prediction(prediction_from_scores({"no_gesture": 1.0}), timestamp_ms=600)
+    controller.update_prediction(swipe, timestamp_ms=700)
+    rearmed = controller.update_prediction(swipe, timestamp_ms=800)
+    assert rearmed.accepted is True and rearmed.final_action == "navigate_next"

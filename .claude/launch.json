@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ar-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "demo/ar_interaction_app", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}

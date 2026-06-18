@@ -19,15 +19,15 @@ On Windows, use the launcher in the repository root:
 .\START_PROJECT.bat
 ```
 
-It creates/updates `.venv311`, installs backend camera dependencies, installs frontend dependencies, starts the FastAPI live backend on `http://127.0.0.1:8000`, starts the React/Three.js interface on `http://127.0.0.1:5173`, waits for both services, and opens the UI.
+It creates/updates `.venv-gesture-ar`, installs backend camera dependencies, installs frontend dependencies, starts the FastAPI live backend on `http://127.0.0.1:8000`, starts the React/Three.js interface on `http://127.0.0.1:5173`, waits for both services, and opens the UI.
 
 Close the `Gesture AR Backend` and `Gesture AR Frontend` console windows to stop the project.
 
 ## Quick Smoke
 
 ```powershell
-python -m venv .venv311
-.\.venv311\Scripts\Activate.ps1
+python -m venv .venv-gesture-ar
+.\.venv-gesture-ar\Scripts\Activate.ps1
 pip install -r requirements\windows-train.txt -r requirements\dev.txt
 python -m research_pipeline.cli.smoke_public
 python -m research_pipeline.cli.smoke_demo
@@ -61,7 +61,7 @@ The GitHub repository intentionally keeps source materials rather than local bui
 - reference gesture clips and notation in `data/reference_gestures` and `data/interaction_gesture_examples`;
 - research and usage documentation in `docs`, `START_HERE.md`, and `PROJECT_OVERVIEW.md`.
 
-The following paths are local/generated and ignored: `.venv311`, `node_modules`, `artifacts`, `data/raw`, `data/processed`, `demo/ar_interaction_app/dist`, and `docs/generated`.
+The following paths are local/generated and ignored: `.venv-gesture-ar`, `node_modules`, `artifacts`, `data/raw`, `data/processed`, `demo/ar_interaction_app/dist`, and `docs/generated`.
 
 Use `START_HERE.md` for the quickest live launch. Use `requirements/windows-train.txt` when reproducing full extraction/training/evaluation runs.
 
@@ -74,7 +74,7 @@ For the shortest launch path, use [`START_HERE.md`](START_HERE.md).
 Backend:
 
 ```powershell
-.\.venv311\Scripts\Activate.ps1
+.\.venv-gesture-ar\Scripts\Activate.ps1
 python -m research_pipeline.cli.serve_live --host 127.0.0.1 --port 8000
 ```
 

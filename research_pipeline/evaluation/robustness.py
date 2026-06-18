@@ -152,4 +152,21 @@ def summarize_robustness(report: dict) -> dict:
             "macro_f1_drop": clean_macro - mean_macro,
             "perturbed_no_gesture_false_action_rate_mean": mean_false_action,
         }
+        clean_calibration = clean.get(method, {}).get("calibration")
+        if clean_calibration is not None:
+            scenario_eces = [
+                float(scenario[method]["calibration"]["expected_calibration_error"])
+                for name, scenario in report.items()
+                if name != "clean" and method in scenario and "calibration" in scenario[method]
+            ]
+            clean_ece = float(clean_calibration.get("expected_calibration_error", 0.0))
+            mean_ece = float(np.mean(scenario_eces)) if scenario_eces else clean_ece
+            summary[method].update(
+                {
+                    "clean_ece": clean_ece,
+                    "clean_brier": float(clean_calibration.get("brier_score", 0.0)),
+                    "perturbed_ece_mean": mean_ece,
+                    "ece_increase": mean_ece - clean_ece,
+                }
+            )
     return summary

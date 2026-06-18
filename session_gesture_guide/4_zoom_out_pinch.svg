@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 230" width="260" height="230" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="1" y="1" width="258" height="228" rx="14" fill="#10171b" stroke="#2b3640" stroke-width="2"/>
+  <text x="130" y="28" text-anchor="middle" fill="#9cf18b" font-size="16" font-weight="700">4 - ZOOM OUT</text>
+  <text x="130" y="48" text-anchor="middle" fill="#aab8bd" font-size="11">bring thumb + index together (pinch close)</text>
+
+  <!-- palm -->
+  <ellipse cx="120" cy="180" rx="28" ry="18" fill="#1c2a31" stroke="#7fb6c8" stroke-width="2"/>
+
+  <!-- index finger -->
+  <line x1="112" y1="166" x2="60" y2="66" stroke="#c9d8dc" stroke-width="9" stroke-linecap="round">
+    <animate attributeName="x2" dur="1.8s" repeatCount="indefinite" values="60;106;60"/>
+    <animate attributeName="y2" dur="1.8s" repeatCount="indefinite" values="66;100;66"/>
+  </line>
+  <!-- thumb -->
+  <line x1="128" y1="166" x2="192" y2="96" stroke="#c9d8dc" stroke-width="9" stroke-linecap="round">
+    <animate attributeName="x2" dur="1.8s" repeatCount="indefinite" values="192;134;192"/>
+    <animate attributeName="y2" dur="1.8s" repeatCount="indefinite" values="96;104;96"/>
+  </line>
+
+  <!-- index tip -->
+  <circle r="8" fill="#f2fffd">
+    <animate attributeName="cx" dur="1.8s" repeatCount="indefinite" values="60;106;60"/>
+    <animate attributeName="cy" dur="1.8s" repeatCount="indefinite" values="66;100;66"/>
+  </circle>
+  <!-- thumb tip -->
+  <circle r="8" fill="#f2fffd">
+    <animate attributeName="cx" dur="1.8s" repeatCount="indefinite" values="192;134;192"/>
+    <animate attributeName="cy" dur="1.8s" repeatCount="indefinite" values="96;104;96"/>
+  </circle>
+
+  <text x="130" y="220" text-anchor="middle" fill="#f0d996" font-size="14" font-weight="700">---&#62;  close  &#60;---</text>
+</svg>
