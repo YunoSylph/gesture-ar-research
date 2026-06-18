@@ -3,20 +3,20 @@
 <text x="24" y="32" font-family="Arial, sans-serif" font-size="20" fill="#172033">Online Gesture Metrics</text>
 <text x="24" y="80" font-family="Arial, sans-serif" font-size="14" fill="#3c465a">Frame acc.</text>
 <rect x="150" y="62" width="520" height="20" rx="3" fill="#e8ecf4"/>
-<rect x="150" y="62" width="151.0" height="20" rx="3" fill="#5f6fdf"/>
-<text x="682" y="77" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.290</text>
+<rect x="150" y="62" width="185.5" height="20" rx="3" fill="#5f6fdf"/>
+<text x="682" y="77" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.357</text>
 <text x="24" y="116" font-family="Arial, sans-serif" font-size="14" fill="#3c465a">Seg. F1</text>
 <rect x="150" y="98" width="520" height="20" rx="3" fill="#e8ecf4"/>
-<rect x="150" y="98" width="237.7" height="20" rx="3" fill="#5f6fdf"/>
-<text x="682" y="113" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.457</text>
+<rect x="150" y="98" width="254.7" height="20" rx="3" fill="#5f6fdf"/>
+<text x="682" y="113" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.490</text>
 <text x="24" y="152" font-family="Arial, sans-serif" font-size="14" fill="#3c465a">No-gesture FP</text>
 <rect x="150" y="134" width="520" height="20" rx="3" fill="#e8ecf4"/>
-<rect x="150" y="134" width="500.7" height="20" rx="3" fill="#d66b4d"/>
-<text x="682" y="149" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.963</text>
+<rect x="150" y="134" width="416.1" height="20" rx="3" fill="#d66b4d"/>
+<text x="682" y="149" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.800</text>
 <text x="24" y="188" font-family="Arial, sans-serif" font-size="14" fill="#3c465a">Accepted/min</text>
 <rect x="150" y="170" width="520" height="20" rx="3" fill="#e8ecf4"/>
-<rect x="150" y="170" width="193.6" height="20" rx="3" fill="#d66b4d"/>
-<text x="682" y="185" font-family="Arial, sans-serif" font-size="13" fill="#172033">0.372</text>
+<rect x="150" y="170" width="520.0" height="20" rx="3" fill="#d66b4d"/>
+<text x="682" y="185" font-family="Arial, sans-serif" font-size="13" fill="#172033">1.000</text>
 <text x="24" y="224" font-family="Arial, sans-serif" font-size="14" fill="#3c465a">Rejected/min</text>
 <rect x="150" y="206" width="520" height="20" rx="3" fill="#e8ecf4"/>
 <rect x="150" y="206" width="520.0" height="20" rx="3" fill="#d66b4d"/>

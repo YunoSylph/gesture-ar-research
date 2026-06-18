@@ -218,8 +218,8 @@ const tasks: TaskDefinition[] = [
     steps: [
       { id: "object_hover", action: "pointer_hover", gesture: "point_2f", label: "Point at AR module" },
       { id: "object_select", action: "select_confirm", gesture: "click_2f", label: "Short click once" },
-      { id: "object_zoom_in", action: "zoom_in", gesture: "zoom_in", label: "Move hand closer" },
-      { id: "object_zoom_out", action: "zoom_out", gesture: "zoom_out", label: "Move hand back" }
+      { id: "object_zoom_in", action: "zoom_in", gesture: "zoom_in", label: "Spread thumb + index (pinch open)" },
+      { id: "object_zoom_out", action: "zoom_out", gesture: "zoom_out", label: "Bring thumb + index together (pinch close)" }
     ]
   },
   {
@@ -334,6 +334,44 @@ const c4TaskChartRows = [
   { method: "M3 Proposed TARC", success: 0.531, precision: 0.974, recall: 0.857, unintended: 0.024, falseCost: 0.025 }
 ];
 
+// Real continuous-stream ablation (pseudo-continuous replay, multi-view C6,
+// n = 24 paired sequences). False-action cost is the per-sequence mean; confident
+// completion is the share of sequences whose graded completion clears tau = 0.5.
+const validationAblationRows = [
+  { method: "Direct (baseline)", falseCost: 169.22, confident: 0.0, completion: 0.058 },
+  { method: "+ smoothing", falseCost: 168.26, confident: 0.0, completion: 0.056 },
+  { method: "+ stabilizer", falseCost: 166.24, confident: 0.0, completion: 0.057 },
+  { method: "+ validation", falseCost: 37.51, confident: 0.0, completion: 0.198 },
+  { method: "+ stability", falseCost: 35.78, confident: 0.0, completion: 0.208 },
+  { method: "+ cooldown", falseCost: 6.98, confident: 0.667, completion: 0.578 },
+  { method: "+ TARC", falseCost: 4.23, confident: 0.875, completion: 0.669 }
+];
+
+// Paired bootstrap vs the direct baseline (lower false-action cost, higher completion).
+const validationStatRows = [
+  { method: "+ validation", falseCostDelta: "-131.71", costCI: "[-146.3, -116.6]", complDelta: "+0.141", p: "<0.001" },
+  { method: "+ cooldown", falseCostDelta: "-162.24", costCI: "[-180.2, -143.4]", complDelta: "+0.521", p: "<0.001" },
+  { method: "+ TARC", falseCostDelta: "-164.99", costCI: "[-182.9, -146.2]", complDelta: "+0.611", p: "<0.001" }
+];
+
+// Confidence calibration on the clean IPN test split (multi-view C6 fusion run).
+const calibrationRows = [
+  { method: "Ensemble (raw)", ece: 0.0207, brier: 0.1186 },
+  { method: "Fusion (macro)", ece: 0.0261, brier: 0.1229 },
+  { method: "Fusion (safety)", ece: 0.0146, brier: 0.1157 }
+];
+
+// Per-class clip-level F1 of the deployed multi-view validated TCN (IPN test).
+const multiviewClassF1 = [
+  { method: "no_gesture", f1: 0.944 },
+  { method: "point_2f", f1: 0.969 },
+  { method: "click_2f", f1: 0.81 },
+  { method: "swipe_left", f1: 0.847 },
+  { method: "swipe_right", f1: 0.819 },
+  { method: "zoom_in", f1: 0.838 },
+  { method: "zoom_out", f1: 0.809 }
+];
+
 const gestureActions: Record<GestureId, ActionId> = {
   no_gesture: "idle",
   point_2f: "pointer_hover",
@@ -377,8 +415,8 @@ const gestureGuideCards: Array<{
     id: "click_2f",
     label: "Click",
     action: "Confirm",
-    pose: "Open/armed hand, short pinch or tap, then release open.",
-    cue: "Wait for lock, then open again before the next click.",
+    pose: "Bring index and middle together, then release.",
+    cue: "Tap the two fingers together to confirm; release before the next click.",
     icon: Crosshair
   },
   {
@@ -401,16 +439,16 @@ const gestureGuideCards: Array<{
     id: "zoom_in",
     label: "Zoom In",
     action: "Scale up",
-    pose: "Change hand scale clearly so it grows in frame.",
-    cue: "Move closer without side motion; random motion is rejected.",
+    pose: "Spread your thumb and index finger apart.",
+    cue: "Pinch-to-zoom: open the pinch to zoom in; keep the hand still.",
     icon: ZoomIn
   },
   {
     id: "zoom_out",
     label: "Zoom Out",
     action: "Scale down",
-    pose: "Change hand scale clearly so it shrinks in frame.",
-    cue: "Move back without side motion; random motion is rejected.",
+    pose: "Bring your thumb and index finger together.",
+    cue: "Pinch-to-zoom: close the pinch to zoom out; keep the hand still.",
     icon: ZoomOut
   }
 ];
@@ -444,6 +482,104 @@ function GesturePoseVisual({ gesture, compact = false }: { gesture: GestureId; c
       </span>
       <span className="pose-touch" />
     </div>
+  );
+}
+
+// Zoom is driven by a thumb-index pinch in the live controller, but the IPN Hand
+// reference clips show the dataset's whole-hand zoom motion, which no longer matches.
+// For those two gestures we show the synthetic pinch visual instead of a misleading clip.
+const PINCH_GESTURES: ReadonlySet<GestureId> = new Set(["zoom_in", "zoom_out"]);
+
+// Real IPN Hand reference clip per gesture (served from public/gestures/<id>.mp4).
+// A looping real example is the source of truth for how the gesture looks, unlike
+// the synthetic CSS hand which previously misrepresented the click pose.
+function GestureClipVisual({ gesture }: { gesture: GestureId }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || PINCH_GESTURES.has(gesture)) {
+    return <GesturePoseVisual gesture={gesture} />;
+  }
+  return (
+    <figure className="gesture-clip">
+      <video
+        className="gesture-clip-video"
+        src={`/gestures/${gesture}.mp4`}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        onError={() => setFailed(true)}
+      />
+      <span className="gesture-clip-tag">real example</span>
+    </figure>
+  );
+}
+
+// Circular fixation indicator around the AR cursor: fills as the controller/validation
+// layer accumulates lock progress, then turns solid cyan when the gesture is locked.
+function LockRing({ progress, mode }: { progress: number; mode: string }) {
+  const radius = 19;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(1, progress));
+  const locked = mode === "locked" || mode === "ready";
+  const active = locked || clamped > 0.001 || mode === "preparing" || mode === "candidate";
+  if (!active) {
+    return null;
+  }
+  return (
+    <svg className={`lock-ring${locked ? " locked" : ""}`} viewBox="0 0 44 44" width="44" height="44" aria-hidden="true">
+      <circle className="lock-ring-track" cx="22" cy="22" r={radius} />
+      <circle
+        className="lock-ring-fill"
+        cx="22"
+        cy="22"
+        r={radius}
+        strokeDasharray={circumference}
+        strokeDashoffset={locked ? 0 : circumference * (1 - clamped)}
+      />
+    </svg>
+  );
+}
+
+// MediaPipe 21-landmark hand topology: bones grouped by digit plus the palm bridge.
+const HAND_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [9, 10], [10, 11], [11, 12],
+  [13, 14], [14, 15], [15, 16],
+  [0, 17], [17, 18], [18, 19], [19, 20],
+  [5, 9], [9, 13], [13, 17]
+];
+
+const FINGERTIPS = new Set([4, 8, 12, 16, 20]);
+
+function HandSkeleton({ landmarks }: { landmarks: number[][] }) {
+  if (landmarks.length < 21) {
+    return null;
+  }
+  // viewBox 0..100 with preserveAspectRatio="none" maps each point to the same
+  // percentage box the HTML joint dots use, so bones and joints stay aligned;
+  // non-scaling-stroke keeps bone width crisp regardless of the feed aspect.
+  return (
+    <svg className="ar-hand-skeleton" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {HAND_CONNECTIONS.map(([from, to], index) => {
+        const start = landmarks[from];
+        const end = landmarks[to];
+        if (!start || !end) {
+          return null;
+        }
+        return (
+          <line
+            key={index}
+            className="bone"
+            x1={start[0] * 100}
+            y1={start[1] * 100}
+            x2={end[0] * 100}
+            y2={end[1] * 100}
+          />
+        );
+      })}
+    </svg>
   );
 }
 
@@ -555,15 +691,89 @@ function advanceTaskRun(current: TaskRunState, taskDefinition: TaskDefinition, a
   };
 }
 
-function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
+// Text label as a camera-facing sprite (canvas texture). The returned sprite
+// exposes userData.setText(t) which redraws only when the text actually changes.
+function makeTextSprite(text: string, opts: { worldHeight?: number; accent?: string } = {}): THREE.Sprite {
+  const worldHeight = opts.worldHeight ?? 0.16;
+  const accent = opts.accent ?? "#b9ced3";
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  const material = new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+
+  const draw = (value: string) => {
+    const fontSize = 46;
+    const font = `600 ${fontSize}px Inter, Arial, sans-serif`;
+    ctx.font = font;
+    const textWidth = Math.ceil(ctx.measureText(value).width);
+    const w = textWidth + 40;
+    const h = fontSize + 30;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = font;
+    ctx.fillStyle = "rgba(14,20,24,0.84)";
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(1.5, 1.5, w - 3, h - 3, 16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#eaf2f6";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(value, w / 2, h / 2 + 2);
+    if (material.map) {
+      material.map.dispose();
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.anisotropy = 4;
+    material.map = texture;
+    material.needsUpdate = true;
+    sprite.scale.set(worldHeight * (w / h), worldHeight, 1);
+  };
+
+  draw(text);
+  sprite.userData.text = text;
+  sprite.userData.setText = (value: string) => {
+    if (value !== sprite.userData.text) {
+      sprite.userData.text = value;
+      draw(value);
+    }
+  };
+  return sprite;
+}
+
+function SceneCanvas({
+  state,
+  task,
+  expectedAction = null,
+  completed = 0,
+  total = 0
+}: {
+  state: SceneState;
+  task: TaskId;
+  expectedAction?: ActionId | null;
+  completed?: number;
+  total?: number;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const objectRef = useRef<THREE.Group | null>(null);
   const pointerRef = useRef<THREE.Mesh | null>(null);
   const scrollGroupRef = useRef<THREE.Group | null>(null);
   const transferGroupRef = useRef<THREE.Group | null>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const highlightRef = useRef<THREE.Mesh | null>(null);
+  const transferLabelsRef = useRef<THREE.Group | null>(null);
+  const counterLabelRef = useRef<THREE.Sprite | null>(null);
+  const scrollLabelRef = useRef<THREE.Sprite | null>(null);
+  const objectLabelRef = useRef<THREE.Sprite | null>(null);
   const stateRef = useRef(state);
   const taskRef = useRef(task);
+  const expectedRef = useRef<ActionId | null>(expectedAction);
+  const completedRef = useRef(completed);
+  const totalRef = useRef(total);
+  const flashRef = useRef(-10);
 
   useEffect(() => {
     stateRef.current = state;
@@ -572,6 +782,19 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
   useEffect(() => {
     taskRef.current = task;
   }, [task]);
+
+  useEffect(() => {
+    expectedRef.current = expectedAction;
+  }, [expectedAction]);
+
+  useEffect(() => {
+    // A newly completed step triggers a short confirmation flash on the target.
+    if (completed > completedRef.current) {
+      flashRef.current = performance.now() / 1000;
+    }
+    completedRef.current = completed;
+    totalRef.current = total;
+  }, [completed, total]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -734,6 +957,40 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
     scene.add(pointer);
     pointerRef.current = pointer;
 
+    // Pulsing ring that marks the target of the current task step (amber while
+    // pending, green once the whole task is complete).
+    const highlight = new THREE.Mesh(
+      new THREE.TorusGeometry(0.7, 0.02, 16, 96),
+      new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85 })
+    );
+    highlight.visible = false;
+    scene.add(highlight);
+    highlightRef.current = highlight;
+
+    // In-scene contextual labels. Kept outside the item/row groups so they do not
+    // interfere with the existing per-child animation loops.
+    const transferLabels = new THREE.Group();
+    const sourceLabel = makeTextSprite("Исходный", { accent: "#7fb6c8" });
+    sourceLabel.position.set(-0.78, 0.66, 0.38);
+    const targetLabel = makeTextSprite("Целевой", { accent: "#9bbb59" });
+    targetLabel.position.set(0.78, 0.66, 0.38);
+    const counterLabel = makeTextSprite("Перенесено: 0 / 4", { worldHeight: 0.18 });
+    counterLabel.position.set(0, 1.34, 0.38);
+    transferLabels.add(sourceLabel, targetLabel, counterLabel);
+    scene.add(transferLabels);
+    transferLabelsRef.current = transferLabels;
+    counterLabelRef.current = counterLabel;
+
+    const scrollLabel = makeTextSprite("Строка 1 / 6", { worldHeight: 0.17, accent: "#72d3c9" });
+    scrollLabel.visible = false;
+    scene.add(scrollLabel);
+    scrollLabelRef.current = scrollLabel;
+
+    const objectLabel = makeTextSprite("AR-модуль · готов", { worldHeight: 0.17 });
+    objectLabel.visible = false;
+    scene.add(objectLabel);
+    objectLabelRef.current = objectLabel;
+
     let frameId = 0;
     const clock = new THREE.Clock();
 
@@ -821,6 +1078,81 @@ function SceneCanvas({ state, task }: { state: SceneState; task: TaskId }) {
       if (materialRef.current) {
         materialRef.current.color.set(current.selected ? 0x9cf18b : 0x72d3c9);
         materialRef.current.emissive.set(current.selected ? 0x183a10 : 0x061f1d);
+      }
+
+      if (highlightRef.current) {
+        const hl = highlightRef.current;
+        const done = totalRef.current > 0 && completedRef.current >= totalRef.current;
+        const flash = Math.max(0, 1 - (elapsed - flashRef.current) / 0.6);
+        const target = new THREE.Vector3();
+        let radius = 0.7;
+        let show = false;
+        if (currentTask === "object" && objectRef.current) {
+          objectRef.current.getWorldPosition(target);
+          radius = 0.72 * current.scale + 0.16;
+          show = true;
+        } else if (currentTask === "scroll" && scrollGroupRef.current?.children.length) {
+          const rows = scrollGroupRef.current.children;
+          const row = rows[Math.max(0, Math.min(rows.length - 1, current.scrollIndex))];
+          row.getWorldPosition(target);
+          radius = 0.74;
+          show = true;
+        } else if (currentTask === "transfer" && transferGroupRef.current) {
+          const trayIndex = current.transferHeld || current.transferIndex > 0 ? 1 : 0;
+          const tray = transferGroupRef.current.children[trayIndex];
+          if (tray) {
+            tray.getWorldPosition(target);
+            radius = 0.8;
+            show = true;
+          }
+        }
+        const active = (!!expectedRef.current && expectedRef.current !== "idle") || done;
+        hl.visible = show && active;
+        if (hl.visible) {
+          hl.position.lerp(target, 0.2);
+          hl.lookAt(camera.position);
+          const pulse = 1 + Math.sin(elapsed * 3.2) * 0.05 + flash * 0.22;
+          const factor = (radius * pulse) / 0.7;
+          hl.scale.lerp(new THREE.Vector3(factor, factor, factor), 0.2);
+          const mat = hl.material as THREE.MeshBasicMaterial;
+          mat.color.set(done ? 0x6ee06e : 0xffd24a);
+          mat.opacity = done ? 0.95 : 0.5 + 0.22 * Math.sin(elapsed * 3.2) + flash * 0.4;
+        }
+      }
+
+      if (transferLabelsRef.current) {
+        transferLabelsRef.current.visible = currentTask === "transfer";
+        if (currentTask === "transfer" && counterLabelRef.current) {
+          const moved = Math.min(4, Math.floor(current.hits / 2));
+          counterLabelRef.current.userData.setText(`Перенесено: ${moved} / 4`);
+        }
+      }
+
+      if (scrollLabelRef.current) {
+        const showScroll = currentTask === "scroll" && !!scrollGroupRef.current?.children.length;
+        scrollLabelRef.current.visible = showScroll;
+        if (showScroll && scrollGroupRef.current) {
+          const rows = scrollGroupRef.current.children;
+          const idx = Math.max(0, Math.min(rows.length - 1, current.scrollIndex));
+          const rowPos = new THREE.Vector3();
+          rows[idx].getWorldPosition(rowPos);
+          scrollLabelRef.current.position.lerp(new THREE.Vector3(rowPos.x + 1.6, rowPos.y, rowPos.z + 0.1), 0.2);
+          scrollLabelRef.current.userData.setText(`Строка ${idx + 1} / ${rows.length}`);
+        }
+      }
+
+      if (objectLabelRef.current) {
+        const showObject = currentTask === "object" && !!objectRef.current;
+        objectLabelRef.current.visible = showObject;
+        if (showObject && objectRef.current) {
+          const objPos = new THREE.Vector3();
+          objectRef.current.getWorldPosition(objPos);
+          objectLabelRef.current.position.lerp(
+            new THREE.Vector3(objPos.x, objPos.y + 0.62 * current.scale + 0.34, objPos.z),
+            0.2
+          );
+          objectLabelRef.current.userData.setText(current.selected ? "AR-модуль · выбран" : "AR-модуль · готов");
+        }
       }
 
       renderer.render(scene, camera);
@@ -920,7 +1252,7 @@ function GuidePage() {
       <div className="guide-grid">
         {gestureGuideCards.map((item) => (
           <article className={`guide-card ${item.id}`} key={item.id}>
-            <GesturePoseVisual gesture={item.id} />
+            <GestureClipVisual gesture={item.id} />
             <div>
               <span>{item.action}</span>
               <strong>{item.label}</strong>
@@ -1047,6 +1379,73 @@ function ResultsPage() {
         />
         <TradeoffChart />
       </div>
+
+      <div className="results-header">
+        <BarChart3 size={22} />
+        <div>
+          <h2>Continuous-stream validation ablation</h2>
+          <p>Multi-view C6 on pseudo-continuous replay, n = 24 paired sequences. The validation/TARC pipeline reduces false AR actions and raises confident task completion on identical streams.</p>
+        </div>
+      </div>
+      <div className="chart-grid compact-results-charts">
+        <MetricBarChart
+          title="False-action cost (per sequence)"
+          subtitle="Lower is better; cost of accidental AR actions across the ablation."
+          values={validationAblationRows}
+          valueKey="falseCost"
+          lowerIsBetter
+        />
+        <MetricBarChart
+          title="Confident completion (tau = 0.5)"
+          subtitle="Share of sequences whose graded completion clears the threshold."
+          values={validationAblationRows}
+          valueKey="confident"
+        />
+        <MetricBarChart
+          title="Graded task completion"
+          subtitle="F1 of cost-weighted action precision and recall."
+          values={validationAblationRows}
+          valueKey="completion"
+        />
+        <MetricBarChart
+          title="Confidence calibration (ECE)"
+          subtitle="Lower is better; the safety fusion is the best-calibrated and beats the raw ensemble."
+          values={calibrationRows}
+          valueKey="ece"
+          lowerIsBetter
+        />
+        <MetricBarChart
+          title="Per-class F1 (multi-view)"
+          subtitle="Clip-level F1 of the deployed multi-view recognizer on the IPN test split."
+          values={multiviewClassF1}
+          valueKey="f1"
+        />
+      </div>
+      <div className="results-table panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Ablation step</th>
+              <th>False-cost delta</th>
+              <th>95% CI</th>
+              <th>Completion delta</th>
+              <th>p (McNemar)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {validationStatRows.map((row) => (
+              <tr key={row.method}>
+                <td>{row.method}</td>
+                <td>{row.falseCostDelta}</td>
+                <td>{row.costCI}</td>
+                <td>{row.complDelta}</td>
+                <td>{row.p}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <div className="results-table panel task-results-table">
         <table>
           <thead>
@@ -1560,7 +1959,7 @@ function App() {
           <ScanLine size={22} strokeWidth={1.9} />
           <div>
             <h1>Gesture AR</h1>
-            <p>IPN Full Benchmark</p>
+            <p>Mid-air interaction</p>
           </div>
         </div>
 
@@ -1779,7 +2178,13 @@ function App() {
         <ResultsPage />
       ) : (
         <section className="work-surface">
-          <SceneCanvas state={sceneState} task={task} />
+          <SceneCanvas
+            state={sceneState}
+            task={task}
+            expectedAction={selectedTask.steps[taskRun.completed]?.action ?? null}
+            completed={taskRun.completed}
+            total={selectedTask.steps.length}
+          />
           {cameraImageSrc ? (
             <img className="ar-camera-feed" src={cameraImageSrc} alt="Live camera AR background" />
           ) : null}
@@ -1790,16 +2195,21 @@ function App() {
               <span>{cameraMessage.body}</span>
             </div>
           ) : null}
+          {cameraImageSrc && landmarks.length >= 21 ? <HandSkeleton landmarks={landmarks} /> : null}
           {cameraImageSrc &&
             landmarks.map((point, index) => (
               <span
                 key={`${point[0]}-${point[1]}-${index}`}
-                className="ar-landmark-dot"
+                className={`ar-landmark-dot${FINGERTIPS.has(index) ? " tip" : ""}`}
                 style={{ left: `${point[0] * 100}%`, top: `${point[1] * 100}%` }}
               />
             ))}
           {cameraImageSrc && pointerScreen ? (
             <span className="ar-pointer-reticle" style={{ left: `${pointerScreen.x * 100}%`, top: `${pointerScreen.y * 100}%` }}>
+              <LockRing
+                progress={validationContext?.lock_progress ?? controlContext?.progress ?? 0}
+                mode={validationContext?.proposal_state ?? controlContext?.mode ?? ""}
+              />
               <Crosshair size={28} strokeWidth={1.8} />
             </span>
           ) : null}

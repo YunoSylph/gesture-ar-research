@@ -13,12 +13,13 @@ from research_pipeline.cli.common import load_yaml, project_path, write_json_rep
 from research_pipeline.data.manifest import read_jsonl
 from research_pipeline.data.schema import ManifestRecord, resolve_path
 from research_pipeline.data.tensors import load_landmark_npz
+from research_pipeline.evaluation.calibration import compute_calibration_report
 from research_pipeline.evaluation.error_analysis import analyze_recognition_risk
 from research_pipeline.evaluation.metrics import RecognitionMetrics, compute_recognition_metrics
 from research_pipeline.evaluation.robustness import PerturbationConfig, perturb_tensor, summarize_robustness
 from research_pipeline.labels import TARGET_LABELS
 from research_pipeline.models.artifacts import load_artifact
-from research_pipeline.models.calibrated import CalibratedFusionConfig, calibrated_fusion_labels
+from research_pipeline.models.calibrated import CalibratedFusionConfig, calibrated_fusion_matrix
 from research_pipeline.models.common import prediction_from_scores
 from research_pipeline.models.hybrid import (
     CachedArtifactPredictor,
@@ -76,7 +77,12 @@ def main() -> None:
     )
 
     candidates = _candidate_configs(config)
-    ranked = _rank_candidates(calibration_pack, candidates, config.get("objective", {}))
+    ranked = _rank_candidates(
+        calibration_pack,
+        candidates,
+        config.get("objective", {}),
+        num_bins=int(config.get("calibration_bins", 15)),
+    )
     selected = _select_configs(ranked)
 
     print(
@@ -100,6 +106,7 @@ def main() -> None:
         evaluation_scenarios,
         selected,
         seed=int(config.get("seed", 42)) + 2000,
+        calibration_bins=int(config.get("calibration_bins", 15)),
     )
     summary = summarize_robustness(robustness)
     clean = robustness.get("clean", {})
@@ -144,7 +151,10 @@ def main() -> None:
 
     c1 = summary.get("c1t_direct", {}).get("perturbed_macro_f1_mean", 0.0)
     c5 = summary.get("c5_safety", {}).get("perturbed_macro_f1_mean", 0.0)
+    c1_ece = summary.get("c1t_direct", {}).get("clean_ece", 0.0)
+    c5_ece = summary.get("c5_safety", {}).get("clean_ece", 0.0)
     print(f"c5_perturbed_macro_f1={c5:.4f} c1t_direct={c1:.4f} delta={c5 - c1:+.4f}")
+    print(f"clean_ece c5_safety={c5_ece:.4f} c1t_direct={c1_ece:.4f} delta={c5_ece - c1_ece:+.4f}")
 
 
 def _predict_scenarios(
@@ -207,19 +217,33 @@ def _predict_records(
     return ScorePack(y_true=y_true, c1_scores=c1_scores, c3_scores=c3_scores, latencies_ms=latencies_ms)
 
 
-def _rank_candidates(pack: ScorePack, candidates: list[CalibratedFusionConfig], objective: dict[str, Any]) -> list[dict]:
+def _rank_candidates(
+    pack: ScorePack,
+    candidates: list[CalibratedFusionConfig],
+    objective: dict[str, Any],
+    *,
+    num_bins: int = 15,
+) -> list[dict]:
     ranked: list[dict] = []
     weak_labels = list(objective.get("weak_labels", ["click_2f", "swipe_left", "zoom_out"]))
     weak_weight = float(objective.get("weak_f1_weight", 0.04))
     false_action_penalty = float(objective.get("false_action_penalty", 0.18))
+    # Calibration is now a first-class selection criterion: an ece_penalty > 0 makes the
+    # safety objective prefer configs that keep the expected calibration error low, instead
+    # of only maximising macro F1 and the no_gesture safety margin (which previously let the
+    # bias/temperature search degrade calibration as a side effect).
+    ece_penalty = float(objective.get("ece_penalty", 0.0))
 
     for candidate in candidates:
-        y_pred = calibrated_fusion_labels(pack.c1_scores, pack.c3_scores, candidate)
+        probabilities = calibrated_fusion_matrix(pack.c1_scores, pack.c3_scores, candidate)
+        y_pred = [TARGET_LABELS[int(index)] for index in probabilities.argmax(axis=1)]
         metrics, risk = _metrics_and_risk(pack.y_true, y_pred)
+        calibration = compute_calibration_report(probabilities, pack.y_true, num_bins=num_bins)
+        ece = calibration.expected_calibration_error
         weak_mean = _weak_mean_f1(metrics, weak_labels)
         false_action = float(risk.get("no_gesture_false_action_rate", 0.0))
         macro_score = metrics.macro_f1 + weak_weight * weak_mean
-        safety_score = macro_score - false_action_penalty * false_action
+        safety_score = macro_score - false_action_penalty * false_action - ece_penalty * ece
         ranked.append(
             {
                 "rank": 0,
@@ -230,6 +254,7 @@ def _rank_candidates(pack: ScorePack, candidates: list[CalibratedFusionConfig], 
                 "balanced_accuracy": metrics.balanced_accuracy,
                 "weak_mean_f1": weak_mean,
                 "no_gesture_false_action_rate": false_action,
+                "expected_calibration_error": ece,
                 "config": _config_to_dict(candidate),
             }
         )
@@ -254,6 +279,7 @@ def _evaluate_selected_configs(
     selected: dict[str, dict],
     *,
     seed: int,
+    calibration_bins: int = 15,
 ) -> dict[str, dict]:
     macro_config = _config_from_dict(selected["macro"]["config"])
     safety_config = _config_from_dict(selected["safety"]["config"])
@@ -268,17 +294,20 @@ def _evaluate_selected_configs(
             scenario,
             seed=seed + scenario_index * 997,
         )
-        methods = {
-            "c1t_direct": [TARGET_LABELS[int(index)] for index in pack.c1_scores.argmax(axis=1)],
-            "c3_hybrid": [TARGET_LABELS[int(index)] for index in pack.c3_scores.argmax(axis=1)],
-            "c5_macro": calibrated_fusion_labels(pack.c1_scores, pack.c3_scores, macro_config),
-            "c5_safety": calibrated_fusion_labels(pack.c1_scores, pack.c3_scores, safety_config),
+        method_probabilities = {
+            "c1t_direct": pack.c1_scores,
+            "c3_hybrid": pack.c3_scores,
+            "c5_macro": calibrated_fusion_matrix(pack.c1_scores, pack.c3_scores, macro_config),
+            "c5_safety": calibrated_fusion_matrix(pack.c1_scores, pack.c3_scores, safety_config),
         }
         scenario_report: dict[str, dict] = {}
-        for name, y_pred in methods.items():
+        for name, probabilities in method_probabilities.items():
+            y_pred = [TARGET_LABELS[int(index)] for index in probabilities.argmax(axis=1)]
             metrics, risk = _metrics_and_risk(pack.y_true, y_pred)
+            calibration = compute_calibration_report(probabilities, pack.y_true, num_bins=calibration_bins)
             scenario_report[name] = {
                 "recognition": metrics.to_dict(),
+                "calibration": calibration.to_dict(),
                 "risk": risk,
                 "latency": {
                     "median_ms": _percentile(pack.latencies_ms, 50),
@@ -385,6 +414,8 @@ def _improvement_summary(clean: dict[str, dict], summary: dict[str, dict]) -> di
     base_clean = clean.get("c1t_direct", {}).get("recognition", {})
     c3_clean = clean.get("c3_hybrid", {}).get("recognition", {})
     c5_clean = clean.get("c5_safety", {}).get("recognition", {})
+    base_calib = clean.get("c1t_direct", {}).get("calibration", {})
+    c5_calib = clean.get("c5_safety", {}).get("calibration", {})
     base_robust = summary.get("c1t_direct", {})
     c3_robust = summary.get("c3_hybrid", {})
     c5_robust = summary.get("c5_safety", {})
@@ -399,6 +430,10 @@ def _improvement_summary(clean: dict[str, dict], summary: dict[str, dict]) -> di
             c5_robust.get("perturbed_no_gesture_false_action_rate_mean", 0.0)
         )
         - float(base_robust.get("perturbed_no_gesture_false_action_rate_mean", 0.0)),
+        "clean_ece_delta_vs_c1t": float(c5_calib.get("expected_calibration_error", 0.0))
+        - float(base_calib.get("expected_calibration_error", 0.0)),
+        "clean_brier_delta_vs_c1t": float(c5_calib.get("brier_score", 0.0))
+        - float(base_calib.get("brier_score", 0.0)),
     }
 
 

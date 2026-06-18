@@ -1,6 +1,6 @@
 # Action Validation Summary
 
-Last updated: 2026-06-15
+Last updated: 2026-06-18
 
 ## Implemented Validation Layer
 
@@ -25,9 +25,9 @@ idle, background, tracking, candidate, preparing, ready, locked, cooldown, relea
 
 ## Relationship To TARC
 
-TARC must only receive proposals whose state is `ready` or `locked`. Unstable candidates, cooldown frames, low-confidence frames, and release-required frames are rejected before they can become task actions.
+TARC only receives proposals whose state is `ready` or `locked`. Unstable candidates, low-confidence frames, cooldown frames, and release-required frames are rejected before they can become task actions.
 
-This separates three concepts that were previously easy to mix together:
+This separates three concepts:
 
 - raw model label;
 - validated gesture proposal;
@@ -35,7 +35,7 @@ This separates three concepts that were previously easy to mix together:
 
 ## Live Demo Integration
 
-The live backend now attaches `validation_context` to websocket payloads. The React UI can show:
+The live backend attaches `validation_context` to websocket payloads. The React UI can show:
 
 - expected gesture;
 - proposal state;
@@ -45,24 +45,24 @@ The live backend now attaches `validation_context` to websocket payloads. The Re
 - cooldown;
 - last accepted action.
 
-The UI guide now follows the gesture contract:
+The UI guide follows the gesture contract:
 
 - `point_2f` is a stable visible-hand cursor state;
-- `click_2f` is open/armed -> short pinch/tap -> lock -> release;
-- swipe is a wide horizontal whole-hand movement;
-- zoom is a clear hand-scale change, not arbitrary finger folding.
+- `click_2f` is a short click/tap with release before the next click;
+- swipe is a wide horizontal movement;
+- zoom is handled by the current live-controller contract and must match the on-screen guide.
 
 ## Current Action-Level Evidence
 
-In the latest pseudo-continuous smoke run, direct mapping accepted many actions and produced high false-action cost. Validation and TARC reduced accepted false actions:
+In the latest pseudo-continuous replay with real extracted IPN landmarks and the multi-view C6 ensemble, direct mapping accepted many noisy actions and produced high false-action cost. Validation and TARC reduced accepted false actions:
 
-| Method | Accepted | Rejected | False-action cost | Task success |
-|---|---:|---:|---:|---:|
-| `direct_c6` | 504 | 0 | 925.0 | 0.0 |
-| `c6_smoothing` | 495 | 0 | 905.0 | 0.0 |
-| `c6_validation_confidence_only` | 54 | 297 | 76.0 | 0.0 |
-| `c6_validation_confidence_stability` | 45 | 327 | 62.0 | 0.0 |
-| `c6_validation_confidence_stability_cooldown` | 11 | 460 | 7.0 | 0.0 |
-| `c6_validation_tarc` | 8 | 472 | 2.0 | 0.0 |
+| Method | Accepted | Rejected | False-action cost | Graded completion | Confident completion |
+|---|---:|---:|---:|---:|---:|
+| `direct_c6` | 3218 | 0 | 4061.25 | 0.058 | 0.000 |
+| `c6_smoothing` | 3202 | 0 | 4038.25 | 0.056 | 0.000 |
+| `c6_validation_confidence_only` | 1037 | 462 | 900.25 | 0.198 | 0.000 |
+| `c6_validation_confidence_stability` | 1010 | 572 | 858.75 | 0.208 | 0.000 |
+| `c6_validation_confidence_stability_cooldown` | 560 | 2355 | 167.50 | 0.578 | 0.667 |
+| `c6_validation_tarc` | 461 | 2543 | 101.50 | 0.669 | 0.875 |
 
-This is a validation smoke result, not final C6 evidence. The meaningful observation is architectural: the proposed gating path sharply reduces false-action cost in the same replay conditions, while task success remains unresolved and must be improved with real C6 outputs and task-tuned action timing.
+The meaningful result is architectural: the same recognizer becomes safer for AR tasks when its output is treated as a proposal and filtered through confidence, stability, cooldown, and task-aware risk logic. The project should claim reduced false actions and improved graded completion, not perfect live control or SOTA recognition.

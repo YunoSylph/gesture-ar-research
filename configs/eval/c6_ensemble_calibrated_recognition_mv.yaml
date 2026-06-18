@@ -1,11 +1,11 @@
 model_paths:
-  - artifacts/models/ipn_c1t_tcn_full_validated.pkl
-  - artifacts/models/ipn_c1t_tcn_augmented.pkl
+  - artifacts/models/ipn_c1t_tcn_full_validated_mv.pkl
+  - artifacts/models/ipn_c1t_tcn_augmented_mv.pkl
 calibration_manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
 evaluation_manifest: data/interim/manifests/ipn_test_full_landmarks.jsonl
 seed: 20260528
 max_calibration_records: 896
-output_report: artifacts/reports/c6_ensemble_calibrated_recognition.json
+output_report: artifacts/reports/c6_ensemble_calibrated_recognition_mv.json
 
 hybrid:
   neural_weight: 0.94

@@ -1,0 +1,46 @@
+# Deploy + train + export requirements for macOS on Apple Silicon (M1/M2/M3).
+# Python 3.11+ (arm64 build). Install into a fresh venv:
+#   python3.11 -m venv .venv-gesture-ar
+#   source .venv-gesture-ar/bin/activate
+#   pip install --upgrade pip
+#   pip install -r requirements/macos-arm64.txt
+#
+# Differences from requirements/windows-train.txt:
+#   - torch/torchvision/torchaudio resolve to the native arm64 wheels with the
+#     Metal (MPS) backend; do NOT use a CUDA index-url on macOS.
+#   - onnxruntime (CPU/CoreML) replaces onnxruntime-gpu, which has no macOS wheel.
+#   - coremltools is added for the CoreML export used by the on-device Apple path.
+
+numpy>=1.26
+PyYAML>=6.0
+scikit-learn>=1.4
+
+# Apple Silicon: plain wheels = CPU + MPS (Metal). No CUDA on macOS.
+torch>=2.4
+torchvision>=0.19
+torchaudio>=2.4
+
+# Landmark capture + video IO (native arm64 wheels).
+mediapipe>=0.10
+opencv-python>=4.9
+
+# Model export for the on-device phone path.
+onnx>=1.16
+onnxruntime>=1.20
+onnxscript>=0.7
+coremltools>=8.0
+
+# Tooling / data / reporting.
+gdown>=6.0
+tqdm>=4.67
+rich>=15.0
+pandas>=3.0
+matplotlib>=3.10
+
+# Live backend (FastAPI websocket server).
+fastapi>=0.136
+uvicorn[standard]>=0.46
+websockets>=16.0
+
+# Tests.
+pytest>=8.0

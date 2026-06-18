@@ -42,8 +42,8 @@ The upgrade is now research-significant: it improves the exact weak classes that
 ## Reproduction
 
 ```powershell
-.\.venv311\Scripts\python.exe -m research_pipeline.cli.train --config configs\train\ipn_c1t_tcn_augmented.yaml
-.\.venv311\Scripts\python.exe -m research_pipeline.cli.benchmark_recognition --config configs\eval\ipn_c1t_tcn_augmented.yaml
-.\.venv311\Scripts\python.exe -m research_pipeline.cli.benchmark_c3_hybrid --config configs\eval\c6_augmented_robustness.yaml
-.\.venv311\Scripts\python.exe -m research_pipeline.cli.run_c5_calibrated_recognition --config configs\eval\c6_ensemble_calibrated_recognition.yaml
+.\.venv-gesture-ar\Scripts\python.exe -m research_pipeline.cli.train --config configs\train\ipn_c1t_tcn_augmented.yaml
+.\.venv-gesture-ar\Scripts\python.exe -m research_pipeline.cli.benchmark_recognition --config configs\eval\ipn_c1t_tcn_augmented.yaml
+.\.venv-gesture-ar\Scripts\python.exe -m research_pipeline.cli.benchmark_c3_hybrid --config configs\eval\c6_augmented_robustness.yaml
+.\.venv-gesture-ar\Scripts\python.exe -m research_pipeline.cli.run_c5_calibrated_recognition --config configs\eval\c6_ensemble_calibrated_recognition.yaml
 ```

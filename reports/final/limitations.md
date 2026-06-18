@@ -1,21 +1,21 @@
 # Limitations
 
-Last updated: 2026-06-15
+Last updated: 2026-06-18
 
 ## Data And Evaluation Limitations
 
-- The current workspace did not contain raw IPN videos, processed landmark tensors, or configured C6 model artifacts.
-- The latest online comparison used synthetic fallback landmarks and the rule-based fallback predictor.
-- Pseudo-continuous replay is useful for reproducible validation, but it is not the same as a fully annotated continuous dataset.
+- The workspace can reproduce the current results when local IPN Hand clips, processed landmarks, and model artifacts are present, but these large assets are intentionally not committed to GitHub.
+- IPN Hand is clip/segment oriented in this workspace. The evaluator therefore builds an explicitly marked pseudo-continuous replay by concatenating real gesture clips with real `no_gesture` idle gaps.
+- Pseudo-continuous replay is useful for reproducible validation, but it is not the same as a fully annotated original continuous stream or a controlled user study.
 - The evaluator should not be compared numerically against OO-dMVMT unless the OO-dMVMT protocol and data setting are reproduced.
-- Current task success is 0.0 in the fallback run, so the project should not claim complete task-level interaction reliability yet.
+- The raw event logs are useful for auditability, but the headline evidence should come from compact summaries and paired comparisons.
 
 ## Model And Controller Limitations
 
-- A clip-level TCN/C6 recognizer can perform well offline and still fail in continuous webcam interaction.
-- The live path combines recognizer output, landmark heuristics, validation, and TARC. Failures must be attributed carefully rather than blamed on a single component.
-- The landmark controller is now executable in the active Python environment, but its current replay numbers still use synthetic fallback landmarks and should not be treated as final live-control evidence.
-- Gesture cards and UI hints are helpful only if they match the gesture contract and the actual controller logic.
+- Clip-level TCN/C6 recognition can perform well offline and still produce unstable live commands in continuous webcam interaction.
+- The online frame-level recognition metrics are intentionally lower than the clip-level metrics because the stream contains idle gaps, transitions, and window-boundary mismatch.
+- The landmark controller remains an engineering baseline. Its current replay metrics are weaker than the C6 validation/TARC path and should not be framed as the central research result.
+- The stricter global release-gate ablation is not deployed because it blocks legitimate next steps when the sliding window does not emit a clean `no_gesture` segment.
 
 ## Live Demo Limitations
 
@@ -28,13 +28,12 @@ Last updated: 2026-06-15
 - The project is not a SOTA gesture-recognition paper.
 - The project is not a clinical rehabilitation system.
 - No medical or therapeutic claims should be made.
-- Hand rehabilitation can be considered as a potential application where exercise attempts are treated as gesture events and repetitions are counted only when confidence, stability and movement-consistency conditions are satisfied.
+- Hand rehabilitation can be considered only as a potential application where exercise attempts are treated as gesture events and repetitions are counted when confidence, stability, and movement-consistency conditions are satisfied.
 
 ## Next Required Work
 
-- Restore or regenerate real IPN landmark tensors.
-- Restore or retrain C6 artifacts only after data availability is verified.
-- Run the online evaluator with real C6 outputs.
-- Add action-level plots for false-action cost, accepted/rejected actions, and action switching.
-- Improve task scenarios until at least one validation mode achieves non-zero task success without increasing false-action cost.
-- Record optional local calibration clips only after the public-data replay protocol is stable.
+- Keep the public-data replay protocol stable and reproducible from a clean machine.
+- Add a lightweight artifact restoration/training guide for users who clone the GitHub repository without local model files.
+- Improve live task timing and user guidance without overstating webcam-demo reliability.
+- Add optional local calibration sessions only after the public-data replay evidence remains stable.
+- Treat phone rear-camera AR as a separate application/domain-shift stage, not as proof that the webcam-trained pipeline transfers automatically.

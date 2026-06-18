@@ -22,6 +22,9 @@ def main() -> None:
     target_length = int(config.get("target_length", 32))
     validation_manifest = config.get("validation_manifest")
     channels = config.get("tcn_channels", config.get("channels"))
+    feature_set = str(config.get("feature_set", "dual_view"))
+    include_multiview = feature_set == "dual_view_multiview" or bool(config.get("include_multiview", False))
+    multiview_coords = int(config.get("multiview_coords", 2))
 
     if model_type == "c0_rule":
         artifact = {
@@ -61,6 +64,8 @@ def main() -> None:
             focal_gamma=float(config.get("focal_gamma", 0.0)),
             label_smoothing=float(config.get("label_smoothing", 0.0)),
             augmentation=config.get("augmentation", {}),
+            include_multiview=include_multiview,
+            multiview_coords=multiview_coords,
         )
     elif model_type in {"temporal_prototype", "c1t_auto", "c1t_tcn"}:
         artifact = train_temporal_prototype(manifest, output_model, seed=seed, target_length=target_length)

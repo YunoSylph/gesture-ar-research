@@ -1,44 +1,51 @@
 # Ablation Summary
 
-Last updated: 2026-06-15
+Last updated: 2026-06-18
 
 ## Implemented Ablation Modes
 
-The online benchmark compares:
+The online benchmark compares the same replay sequences under several controller policies:
 
-- `direct_c6`: raw prediction mapped directly to action;
-- `c6_smoothing`: temporal score smoothing before direct action mapping;
+- `direct_c6`: raw C6 prediction mapped directly to action;
+- `c6_smoothing`: temporal score smoothing before direct mapping;
+- `c6_temporal_stabilized`: additional label stabilizer for jitter reduction;
 - `c6_validation_confidence_only`: confidence gate only;
-- `c6_validation_confidence_stability`: confidence plus temporal stability;
+- `c6_validation_confidence_stability`: confidence plus short temporal stability;
 - `c6_validation_confidence_stability_cooldown`: confidence, stability, cooldown, and release checks;
-- `c6_validation_tarc`: validation plus task-aware expected gesture and risk policy;
-- `landmark_controller`: live landmark controller baseline when dependencies are available;
-- `landmark_controller_tarc`: landmark controller plus validation/TARC.
+- `c6_validation_tarc`: full validation plus task-aware expected gesture and risk policy;
+- `c6_validation_tarc_release`: stricter global release gate, evaluated as a negative ablation;
+- `landmark_controller` and `landmark_controller_tarc`: engineering baselines.
 
 ## Current Comparison Table
 
-Latest smoke run:
+Latest real-landmark pseudo-continuous run with the deployed multi-view C6 ensemble:
 
-| Method | Effective predictor | Accuracy | Segment F1 | FP/min | Switch/min | Accepted | Rejected | False-action cost | Missed-action cost | Task success |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `direct_c6` | `rule_based` | 0.290323 | 0.457143 | 41.893590 | 33.514872 | 504 | 0 | 925.0 | 3.0 | 0.0 |
-| `c6_smoothing` | `rule_based` | 0.290323 | 0.484848 | 36.307778 | 27.929060 | 495 | 0 | 905.0 | 3.0 | 0.0 |
-| `c6_validation_confidence_only` | `rule_based` | 0.287250 | 0.457143 | 41.893590 | 33.514872 | 54 | 297 | 76.0 | 3.0 | 0.0 |
-| `c6_validation_confidence_stability` | `rule_based` | 0.290323 | 0.457143 | 41.893590 | 33.514872 | 45 | 327 | 62.0 | 3.0 | 0.0 |
-| `c6_validation_confidence_stability_cooldown` | `rule_based` | 0.290323 | 0.457143 | 41.893590 | 33.514872 | 11 | 460 | 7.0 | 5.0 | 0.0 |
-| `c6_validation_tarc` | `rule_based` | 0.290323 | 0.457143 | 41.893590 | 33.514872 | 8 | 472 | 2.0 | 5.0 | 0.0 |
-| `landmark_controller` | `rule_based` | 0.164363 | 0.434783 | 16.757436 | 22.343248 | 645 | 0 | 181.75 | 5.25 | 0.0 |
-| `landmark_controller_tarc` | `rule_based` | 0.164363 | 0.476190 | 11.171624 | 16.757436 | 257 | 379 | 63.0 | 8.5 | 0.0 |
+| Method | Accuracy | Segment F1 | FP/min | Switch/min | Accepted | Rejected | False-action cost | Graded completion | Confident completion |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `direct_c6` | 0.3576 | 0.4898 | 52.45 | 51.62 | 3218 | 0 | 4061.25 | 0.058 | 0.000 |
+| `c6_smoothing` | 0.3363 | 0.5414 | 40.79 | 41.21 | 3202 | 0 | 4038.25 | 0.056 | 0.000 |
+| `c6_temporal_stabilized` | 0.3075 | 0.5645 | 34.13 | 35.38 | 3172 | 0 | 3989.75 | 0.057 | 0.000 |
+| `c6_validation_confidence_only` | 0.3519 | 0.4948 | 51.20 | 51.20 | 1037 | 462 | 900.25 | 0.198 | 0.000 |
+| `c6_validation_confidence_stability` | 0.3555 | 0.4932 | 51.62 | 52.03 | 1010 | 572 | 858.75 | 0.208 | 0.000 |
+| `c6_validation_confidence_stability_cooldown` | 0.3574 | 0.4898 | 52.45 | 51.62 | 560 | 2355 | 167.50 | 0.578 | 0.667 |
+| `c6_validation_tarc` | 0.3567 | 0.4898 | 52.45 | 51.62 | 461 | 2543 | 101.50 | 0.669 | 0.875 |
+| `c6_validation_tarc_release` | 0.3571 | 0.4898 | 52.45 | 51.62 | 437 | 2638 | 95.75 | 0.522 | 0.542 |
+| `landmark_controller` | 0.1218 | 0.1552 | 138.20 | 138.20 | 4018 | 0 | 1650.50 | 0.085 | 0.000 |
+| `landmark_controller_tarc` | 0.1401 | 0.2676 | 67.85 | 69.51 | 1494 | 2313 | 391.75 | 0.238 | 0.083 |
 
 ## Interpretation
 
-The current smoke run shows action-level improvement, not recognition-level improvement. Validation does not improve frame accuracy in the fallback run, because the same effective predictor is used and the proposal stream still records rejected candidate labels. The improvement appears in accepted actions and false-action cost.
+The ablation supports an action-validation claim, not a frame-recognition claim. Smoothing and stabilizing reduce jitter metrics but do not solve task completion by themselves. The main gain appears when the system stops treating every classifier output as an immediate AR command.
 
-The strongest current action-level reduction is:
+The strongest operating point is `c6_validation_tarc`:
 
 ```text
-direct_c6 false-action cost: 925.0
-c6_validation_tarc false-action cost: 2.0
+direct_c6 mean false-action cost: 169.22 per sequence-task
+c6_validation_tarc mean false-action cost: 4.23 per sequence-task
+direct_c6 graded completion: 0.058
+c6_validation_tarc graded completion: 0.669
 ```
 
-This supports the intended research hypothesis only at smoke-test level. Final claims require real C6 artifacts and processed landmark tensors.
+The paired comparison reports a mean false-action-cost reduction of `-164.99` with a 95% bootstrap CI of `[-182.94, -146.19]` and `p < 0.001`. Graded task completion improves by `+0.611`, also with `p < 0.001`.
+
+`c6_validation_tarc_release` is deliberately not adopted: although it trims cost slightly further, it blocks legitimate next steps when the 32-frame window does not emit a clean `no_gesture` release between adjacent gestures, reducing completion from `0.669` to `0.522`.

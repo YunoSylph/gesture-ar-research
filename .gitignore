@@ -1,6 +1,8 @@
 .venv/
-.venv311/
+.venv-gesture-ar/
 .vs/
+.claude/
+.pytest_tmp/
 __pycache__/
 *.pyc
 *.egg-info/
@@ -8,11 +10,15 @@ __pycache__/
 .sixth/
 artifacts/
 docs/generated/
+IPN_Hand/
 data/raw/
 data/processed/
+reports/online_gesture/events.*
 node_modules/
 dist/
 demo/ar_interaction_app/dist/
+demo/ar_interaction_app/public/gestures/
+session_gesture_guide/
 npm-debug.log*
 launcher_test*.log
 *.onnx

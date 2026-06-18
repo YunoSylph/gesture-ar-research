@@ -42,6 +42,41 @@ This is an application motivation only. The current project does not include cli
 
 ## Current Evidence Status
 
-The current online comparison demonstrates the evaluation machinery and the expected action-validation effect on pseudo-continuous replay. In the latest available smoke run, the effective predictor was the rule-based fallback because C6 model artifacts and processed tensors were unavailable in the checked workspace. Therefore the current numeric table is useful for validating the pipeline behavior, not for publishing final recognition quality.
+Last updated: 2026-06-16.
 
-The final thesis-grade evidence still requires running the same online evaluator with restored processed landmark tensors and C6 artifacts.
+The evidence now runs on real data, not a fallback. Real MediaPipe-21 landmark tensors are extracted
+from the official IPN Hand videos (2405 train / 1033 test clips). The recognizer is the trained
+two-TCN C6 ensemble with the OO-dMVMT multi-view feature block (Joint Collection Distances plus
+slow/fast motion), calibrated score fusion, and the validation/TARC layer. The headline ablation
+(false-action-cost reduction, n = 24 paired sequences, bootstrap CI + exact McNemar) is in
+`reports/final/online_summary.md`; offline recognition, confidence calibration (ECE/MCE/Brier), and
+the multi-view comparison are in `reports/final/recognition_summary.md`.
+
+## Scope and Validity of Evidence
+
+This is the desktop/webcam + public-data replay proof. Four boundaries are stated explicitly and
+must not be blurred when the work is presented:
+
+1. **Pseudo-continuous, not a fully annotated continuous dataset.** The online stream is real
+   gesture clips and real no_gesture idle gaps concatenated in task order; it is not the original
+   uncut IPN continuous timeline with frame-level onset/offset ground truth. The replay is valid
+   evidence for the *relative* effect of the validation/TARC layer on identical sequences across
+   methods (a paired, controlled comparison), but not for *absolute* continuous-stream segmentation
+   quality. A truly continuous annotated set is future work.
+2. **The live webcam demo is illustration, not proof.** It is an engineering demonstration and a
+   failure-analysis surface. Every scientific claim rests on the reproducible replay/evaluation
+   pipeline and its ablation tables, never on visual impressions from the live demo.
+3. **Task completion is reported with graded metrics, not the floor-effect binary.** TARC
+   demonstrably reduces false AR actions (the defended claim) *and* raises task completion on the
+   same paired sequences: the graded `task_completion` score rises 0.058 -> 0.669 and the
+   confident-completion rate (completion score >= tau = 0.5) rises 0.000 -> 0.875, both significant
+   (paired bootstrap, n = 24, p < 0.001). The strict binary success (every step in order with zero
+   false-action cost) stays low (<= 0.083) and is kept only for completeness -- it is a deliberately
+   conservative bar, not the headline. What is *not* yet claimed: perfectly clean end-to-end runs,
+   and validation of task completion on live sessions rather than replay. Tightening task logic,
+   timing, gesture locking, and live calibration to lift the strict bar remains future work.
+4. **OO-dMVMT alignment is methodological, not architectural.** The project follows OO-dMVMT's
+   evaluation direction (continuous-stream recognition/segmentation framing, decision latency, false
+   positives) and borrows its multi-view feature idea. It does not reproduce the multi-view
+   multi-task architecture or its training protocol, so no numeric comparison with OO-dMVMT results
+   is made or implied.

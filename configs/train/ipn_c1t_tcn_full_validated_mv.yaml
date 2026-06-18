@@ -1,0 +1,18 @@
+model_type: c1t_tcn
+backend: torch
+manifest: data/interim/manifests/ipn_train_full_landmarks.jsonl
+output_model: artifacts/models/ipn_c1t_tcn_full_validated_mv.pkl
+seed: 13
+target_length: 32
+epochs: 90
+batch_size: 64
+learning_rate: 0.001
+weight_decay: 0.01
+validation_split: 0.15
+early_stopping_patience: 10
+early_stopping_min_delta: 0.0001
+
+# OO-dMVMT multi-view block (JCD + slow/fast motion) appended to the per-frame
+# features. Image xy only (coords=2) to avoid MediaPipe's noisy relative-z.
+feature_set: dual_view_multiview
+multiview_coords: 2

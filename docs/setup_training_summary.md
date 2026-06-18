@@ -8,7 +8,7 @@ Machine: Windows, NVIDIA GeForce RTX 5070 Ti Laptop GPU
 Created a Python 3.11 environment at:
 
 ```powershell
-.venv311
+.venv-gesture-ar
 ```
 
 Installed:
@@ -134,7 +134,7 @@ Full artifacts:
 Activate environment:
 
 ```powershell
-.\.venv311\Scripts\Activate.ps1
+.\.venv-gesture-ar\Scripts\Activate.ps1
 ```
 
 Run tests:

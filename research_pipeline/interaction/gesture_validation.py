@@ -74,6 +74,11 @@ class GestureValidationConfig:
     use_stability: bool = True
     use_cooldown: bool = True
     require_release: bool = True
+    # Release-gated re-arming: after any command is accepted, block *every* command
+    # (not just a repeat of the same one) until a no_gesture release is observed.
+    # Standard gesture-UI debouncing; uses only the layer's own accept history, never
+    # ground truth, so it cuts cross-step spurious accepts without inflating recall.
+    require_global_release: bool = False
     contract: dict[str, GestureContractRule] = field(default_factory=lambda: dict(DEFAULT_GESTURE_CONTRACT))
 
 
@@ -138,6 +143,7 @@ class GestureValidationLayer:
         self.locked_label = ""
         self.lock_until_ms = -1
         self.release_label = ""
+        self.awaiting_release = False
         self.last_accepted_action = "idle"
 
     def reset(self) -> None:
@@ -147,6 +153,7 @@ class GestureValidationLayer:
         self.locked_label = ""
         self.lock_until_ms = -1
         self.release_label = ""
+        self.awaiting_release = False
         self.last_accepted_action = "idle"
 
     def update(
@@ -221,6 +228,7 @@ class GestureValidationLayer:
             self.candidate_label = ""
             self.candidate_count = 0
             self.release_label = ""
+            self.awaiting_release = False
             return self._result(
                 proposal_label="no_gesture",
                 state="background",
@@ -235,6 +243,23 @@ class GestureValidationLayer:
 
         rule = self._rule(label)
         cooldown_remaining = self._cooldown_remaining(item.timestamp_ms)
+        if self.config.require_global_release and self.awaiting_release and rule.command:
+            return self._result(
+                proposal_label=label,
+                state="release_required",
+                confidence=confidence,
+                expected_label=expected,
+                ready=False,
+                accepted=False,
+                rejected=True,
+                rejection_reason="awaiting_release",
+                lock_progress=0.0,
+                cooldown_remaining=cooldown_remaining,
+                stable_frames=self.candidate_count,
+                required_frames=self._required_frames(label),
+                action=rule.action,
+                risk_cost=rule.risk_cost,
+            )
         if self.config.require_release and self.release_label == label and rule.release_required:
             return self._result(
                 proposal_label=label,
@@ -340,6 +365,8 @@ class GestureValidationLayer:
         self.locked_label = label if rule.command else ""
         self.lock_until_ms = item.timestamp_ms + max(0, self.config.lock_hold_ms) if rule.command else -1
         self.release_label = label if rule.release_required else ""
+        if self.config.require_global_release and rule.command:
+            self.awaiting_release = True
         self.last_accepted_action = rule.action if rule.action else "idle"
         state = "ready" if not rule.command else "locked"
         return self._result(
@@ -437,6 +464,7 @@ def config_from_mapping(payload: dict[str, Any] | None) -> GestureValidationConf
         use_stability=bool(raw.get("use_stability", True)),
         use_cooldown=bool(raw.get("use_cooldown", True)),
         require_release=bool(raw.get("require_release", True)),
+        require_global_release=bool(raw.get("require_global_release", False)),
     )
 
 

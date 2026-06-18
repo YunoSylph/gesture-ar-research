@@ -35,6 +35,9 @@ class CachedArtifactPredictor:
         self.artifact = artifact
         self.model_type = artifact["model_type"]
         self.target_length = int(artifact.get("target_length", 32))
+        features_cfg = artifact.get("features", {})
+        self._include_multiview = bool(features_cfg.get("include_multiview", False))
+        self._multiview_coords = int(features_cfg.get("multiview_coords", 2))
         self._torch_model = None
 
         if self.model_type == "c1t_tcn_torch":
@@ -52,7 +55,12 @@ class CachedArtifactPredictor:
             raise PipelineError(f"Unsupported model_type '{self.model_type}'.")
 
     def predict(self, tensor: LandmarkTensor) -> Prediction:
-        sequence = preprocess_dual_view(tensor, target_length=self.target_length)
+        sequence = preprocess_dual_view(
+            tensor,
+            target_length=self.target_length,
+            include_multiview=self._include_multiview,
+            multiview_coords=self._multiview_coords,
+        )
 
         if self.model_type == "c0_rule":
             recognizer = RuleBasedRecognizer(**self.artifact.get("params", {}))

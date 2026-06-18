@@ -5,13 +5,13 @@
 Откройте PowerShell в корне проекта:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research"
+cd "<path-to-repo>"
 powershell -ExecutionPolicy Bypass -File .\scripts\start_ar_demo.ps1
 ```
 
 Скрипт запустит:
 
-- `.venv311` и live-зависимости из `requirements/live.txt`, если окружение еще не создано;
+- `.venv-gesture-ar` и live-зависимости из `requirements/live.txt`, если окружение еще не создано;
 - `npm install` для frontend, если `node_modules` отсутствует;
 - Python backend на `http://127.0.0.1:8000`;
 - React/Three.js интерфейс на первом свободном порту `5173-5179`;
@@ -30,9 +30,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start_ar_demo.ps1 -Restart
 Терминал 1:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research"
-python -m venv .venv311
-.\.venv311\Scripts\Activate.ps1
+cd "<path-to-repo>"
+python -m venv .venv-gesture-ar
+.\.venv-gesture-ar\Scripts\Activate.ps1
 pip install -r requirements\live.txt
 python -m research_pipeline.cli.serve_live --host 127.0.0.1 --port 8000
 ```
@@ -40,7 +40,7 @@ python -m research_pipeline.cli.serve_live --host 127.0.0.1 --port 8000
 Терминал 2:
 
 ```powershell
-cd "C:\Users\Maksim Iuzhakov\Desktop\Hand Gestures Project\gesture-ar-research\demo\ar_interaction_app"
+cd "<path-to-repo>\demo\ar_interaction_app"
 npm install
 npm run dev -- --port 5173
 ```

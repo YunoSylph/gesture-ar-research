@@ -15,6 +15,7 @@ from research_pipeline.data.manifest import read_jsonl
 from research_pipeline.data.schema import ManifestRecord, resolve_path
 from research_pipeline.data.synthetic import synthetic_landmarks
 from research_pipeline.data.tensors import LandmarkTensor, load_landmark_npz
+from research_pipeline.features.preprocessing import resample_landmarks
 from research_pipeline.evaluation.action_risk import normalize_action_costs
 from research_pipeline.evaluation.online_gesture import (
     EVENT_FIELDNAMES,
@@ -40,6 +41,8 @@ from research_pipeline.evaluation.task_replay import (
     evaluate_task_set,
 )
 from research_pipeline.interaction.fsm import ACTION_BY_LABEL
+from research_pipeline.interaction.stabilizer import TemporalLabelStabilizer, TemporalStabilizerConfig
+from research_pipeline.evaluation.statistics import PairedComparison, paired_comparison
 from research_pipeline.labels import TARGET_LABELS
 from research_pipeline.models.common import Prediction, prediction_from_scores
 from research_pipeline.models.rule_based import RuleBasedRecognizer
@@ -48,10 +51,12 @@ from research_pipeline.models.rule_based import RuleBasedRecognizer
 COMPARISON_METHODS = [
     "direct_c6",
     "c6_smoothing",
+    "c6_temporal_stabilized",
     "c6_validation_confidence_only",
     "c6_validation_confidence_stability",
     "c6_validation_confidence_stability_cooldown",
     "c6_validation_tarc",
+    "c6_validation_tarc_release",
     "landmark_controller",
     "landmark_controller_tarc",
 ]
@@ -150,7 +155,17 @@ def run_online_benchmark(config_path: Path, output_dir: Path) -> dict[str, Any]:
         raise SystemExit("No pseudo-continuous sequences could be built from the manifest.")
 
     data_mode = _combine_data_modes(sequence.data_mode for sequence in sequences)
-    if data_mode != "real_landmark_tensors":
+    if data_mode == "real_landmark_tensors":
+        limitations.append(
+            "Gesture and idle segments use real extracted MediaPipe landmarks from IPN Hand clips; "
+            "the only synthetic element is the concatenation order (pseudo-continuous replay)."
+        )
+    elif "real" in data_mode:
+        limitations.append(
+            "Gesture clips use real extracted landmarks, but some idle gaps or clips fell back to synthetic "
+            "landmarks; treat the affected segments accordingly."
+        )
+    else:
         limitations.append(
             "This run used synthetic fallback landmarks because processed tensors were not available; "
             "do not interpret recognition metrics as public benchmark results."
@@ -165,6 +180,13 @@ def run_online_benchmark(config_path: Path, output_dir: Path) -> dict[str, Any]:
         for method in COMPARISON_METHODS
         if method in method_results
     ]
+    statistical_comparison = _statistical_comparison(method_results)
+    paired_units = len(method_results.get("direct_c6", {}).get("task_replay", {}).get("tasks", []))
+    if 0 < paired_units < 5:
+        limitations.append(
+            f"Statistical comparison has only {paired_units} paired sequence(s); raise task_replay.trials_per_task "
+            "so the confidence intervals and McNemar p-values become meaningful."
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     figures_dir = output_dir / "figures"
@@ -192,6 +214,7 @@ def run_online_benchmark(config_path: Path, output_dir: Path) -> dict[str, Any]:
         "label_counts": dict(Counter(event.ground_truth_label for event in all_events)),
         "evaluation": proposed["evaluation"],
         "method_comparison": comparison_rows,
+        "statistical_comparison": statistical_comparison,
         "method_details": {
             method: {
                 "evaluation": result["evaluation"],
@@ -215,7 +238,7 @@ def run_online_benchmark(config_path: Path, output_dir: Path) -> dict[str, Any]:
     write_events_csv(events_csv, all_events)
     write_events_jsonl(events_jsonl, all_events)
     _write_comparison_csv(comparison_csv, comparison_rows)
-    _write_comparison_markdown(comparison_md, comparison_rows, summary["limitations"])
+    _write_comparison_markdown(comparison_md, comparison_rows, summary["limitations"], statistical_comparison)
     with summary_json.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(summary, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.write("\n")
@@ -269,11 +292,20 @@ def _analyze_availability(records: list[ManifestRecord], manifest_path: Path, co
     model_artifacts_found = sum(1 for path in model_paths if path.exists())
 
     has_annotation_order = len(timestamped) == len(records) and bool(records)
-    reason = (
-        "Full continuous IPN timeline is not available: the manifest stores selected/remapped clips with timestamps, "
-        "but raw videos are absent and gaps may contain omitted IPN classes or unannotated motion. "
-        "The evaluator therefore runs in explicitly marked pseudo-continuous mode."
-    )
+    tensors_complete = bool(tensor_paths) and tensor_files_found == len(tensor_paths)
+    if tensors_complete:
+        reason = (
+            "Real extracted landmark tensors are available for every manifest clip, but the dataset stores "
+            "segmented clips rather than the original uncut IPN recordings. The evaluator therefore builds an "
+            "explicitly marked pseudo-continuous stream by concatenating real gesture clips with real no_gesture "
+            "idle gaps; this is real-clip replay, not the original continuous IPN timeline."
+        )
+    else:
+        reason = (
+            "Full continuous IPN timeline is not available: the manifest stores selected/remapped clips with "
+            "timestamps, and some processed tensors are missing, so the evaluator runs in explicitly marked "
+            "pseudo-continuous mode with synthetic fallback for the missing clips."
+        )
     return {
         "manifest_records": len(records),
         "manifest_path": str(manifest_path),
@@ -386,18 +418,20 @@ def _build_task_sequences(
             for step_index, step in enumerate(scenario.expected_steps):
                 if tensors:
                     idle_frames = max(2, int(round(idle_gap_ms / max(1, frame_step_ms))))
-                    idle_tensor = synthetic_landmarks(
-                        "no_gesture",
-                        length=idle_frames,
+                    idle_tensor, idle_mode = _idle_tensor(
+                        records_by_label.get("no_gesture", []),
+                        manifest_path,
+                        counters=counters,
+                        idle_frames=idle_frames,
+                        max_frames_per_clip=max_frames_per_clip,
                         seed=200_000 + trial * 1000 + step_index,
-                        sample_id=f"{task_id}:idle:{trial}:{step_index}",
                     )
                     tensors.append(idle_tensor)
                     labels.extend(["no_gesture"] * idle_frames)
                     expected_labels.extend([""] * idle_frames)
                     task_steps.extend([""] * idle_frames)
-                    segment_sources.append({"kind": "inserted_idle", "label": "no_gesture", "frames": idle_frames})
-                    data_modes.add("synthetic_inserted_idle")
+                    segment_sources.append({"kind": "inserted_idle", "label": "no_gesture", "frames": idle_frames, "data_mode": idle_mode})
+                    data_modes.add(idle_mode)
 
                 label = step.expected_label
                 candidates = records_by_label.get(label, [])
@@ -469,6 +503,8 @@ def _build_manifest_order_sequences(
     max_frames_per_clip = int(replay.get("max_frames_per_clip", 48))
     synthetic_fallback = bool(replay.get("synthetic_fallback", True))
     insert_idle = bool(replay.get("insert_idle_between_clips", True))
+    no_gesture_pool = [record for record in records if record.target_label == "no_gesture"]
+    idle_counters: Counter[str] = Counter()
 
     by_session: dict[str, list[ManifestRecord]] = defaultdict(list)
     for record in records:
@@ -491,13 +527,20 @@ def _build_manifest_order_sequences(
         for clip_index, record in enumerate(selected):
             if insert_idle and tensors:
                 idle_frames = max(2, int(round(idle_gap_ms / max(1, frame_step_ms))))
-                idle_tensor = synthetic_landmarks("no_gesture", length=idle_frames, seed=100_000 + session_index * 1000 + clip_index)
+                idle_tensor, idle_mode = _idle_tensor(
+                    no_gesture_pool,
+                    manifest_path,
+                    counters=idle_counters,
+                    idle_frames=idle_frames,
+                    max_frames_per_clip=max_frames_per_clip,
+                    seed=100_000 + session_index * 1000 + clip_index,
+                )
                 tensors.append(idle_tensor)
                 labels.extend(["no_gesture"] * idle_frames)
                 expected_labels.extend([""] * idle_frames)
                 task_steps.extend([""] * idle_frames)
-                segment_sources.append({"kind": "inserted_idle", "label": "no_gesture", "frames": idle_frames})
-                data_modes.add("synthetic_inserted_idle")
+                segment_sources.append({"kind": "inserted_idle", "label": "no_gesture", "frames": idle_frames, "data_mode": idle_mode})
+                data_modes.add(idle_mode)
             tensor, data_mode, missing = _tensor_for_record(
                 record,
                 manifest_path,
@@ -528,6 +571,36 @@ def _build_manifest_order_sequences(
             f"{missing_tensor_count} manifest clips referenced missing tensor files and were replaced by synthetic landmarks."
         )
     return sequences, limitations
+
+
+def _idle_tensor(
+    no_gesture_records: list[ManifestRecord],
+    manifest_path: Path,
+    *,
+    counters: Counter[str],
+    idle_frames: int,
+    max_frames_per_clip: int,
+    seed: int,
+) -> tuple[LandmarkTensor, str]:
+    """Idle gap between gesture clips.
+
+    Prefer a real ``no_gesture`` clip (the manifest has hundreds), resampled to
+    the gap length, so the replay stream is real end to end. Only fall back to
+    synthetic landmarks when no real ``no_gesture`` tensor is available.
+    """
+
+    if no_gesture_records:
+        record = no_gesture_records[counters["__idle__"] % len(no_gesture_records)]
+        counters["__idle__"] += 1
+        tensor, data_mode, _ = _tensor_for_record(
+            record,
+            manifest_path,
+            synthetic_fallback=True,
+            max_frames_per_clip=max_frames_per_clip,
+        )
+        if data_mode == "real_landmark_tensors":
+            return resample_landmarks(tensor, target_length=idle_frames), "real_landmark_tensors"
+    return synthetic_landmarks("no_gesture", length=idle_frames, seed=seed), "synthetic_inserted_idle"
 
 
 def _tensor_for_record(
@@ -611,7 +684,11 @@ def _run_method_comparison(
                 min_segment_iou=float(config.get("metrics", {}).get("min_segment_iou", 0.1)),
                 latency_grace_ms=int(config.get("metrics", {}).get("latency_grace_ms", 1000)),
             ),
-            "task_replay": evaluate_task_set(events, scenarios),
+            "task_replay": evaluate_task_set(
+                events,
+                scenarios,
+                completion_threshold=float(config.get("task_replay", {}).get("completion_threshold", 0.5)),
+            ),
         }
     return results
 
@@ -628,6 +705,7 @@ def _run_method(
     frame_step_ms = int(replay.get("frame_step_ms", 33))
     window_size = int(replay.get("window_size", 32))
     smoothing_window = int(config.get("smoothing", {}).get("window", 5))
+    stabilizer_cfg = config.get("stabilizer", {})
     events: list[OnlineEvent] = []
     live_controller_available = True
     live_controller_error = ""
@@ -640,11 +718,19 @@ def _run_method(
         validation_layer = GestureValidationLayer(_config_for_method(validation_config, method))
         landmark_validation_layer = GestureValidationLayer(_config_for_method(validation_config, method))
         smoothing_history: deque[Prediction] = deque(maxlen=max(1, smoothing_window))
+        stabilizer = TemporalLabelStabilizer(
+            TemporalStabilizerConfig(
+                window=int(stabilizer_cfg.get("window", 7)),
+                enter_fraction=float(stabilizer_cfg.get("enter_fraction", 0.5)),
+                min_confidence=float(stabilizer_cfg.get("min_confidence", 0.0)),
+                sticky=bool(stabilizer_cfg.get("sticky", True)),
+            )
+        )
         live_controller = _new_live_controller() if live_controller_available and method.startswith("landmark_controller") else None
         for frame_index, ground_truth_label in enumerate(sequence.labels):
             timestamp_ms = frame_index * frame_step_ms
             raw = raw_predictions[(sequence.sequence_id, frame_index)]
-            expected_label = sequence.expected_labels[frame_index] if method.endswith("_tarc") else ""
+            expected_label = sequence.expected_labels[frame_index] if "tarc" in method else ""
             prediction_for_decision = raw
 
             if method == "direct_c6":
@@ -654,6 +740,10 @@ def _run_method(
                 smoothed = _smooth_prediction(smoothing_history)
                 prediction_for_decision = smoothed
                 decision = _direct_decision(smoothed, controller_mode="c6_smoothing", action_costs=_action_costs(validation_config))
+            elif method == "c6_temporal_stabilized":
+                stabilized = stabilizer.update_prediction(raw)
+                prediction_for_decision = stabilized
+                decision = _direct_decision(stabilized, controller_mode="c6_temporal_stabilized", action_costs=_action_costs(validation_config))
             elif method in {
                 "c6_validation_confidence_only",
                 "c6_validation_confidence_stability",
@@ -666,7 +756,7 @@ def _run_method(
                     top2_margin_value=top2_margin(raw.scores),
                 )
                 decision = _decision_from_validation(validation, controller_mode=method, tarc=False)
-            elif method == "c6_validation_tarc":
+            elif method in {"c6_validation_tarc", "c6_validation_tarc_release"}:
                 validation = validation_layer.update_prediction(
                     raw,
                     timestamp_ms=timestamp_ms,
@@ -710,7 +800,7 @@ def _run_method(
                     model_label=raw.label,
                     model_confidence=float(raw.confidence),
                     top2_margin=top2_margin(raw.scores),
-                    proposal_label=prediction_for_decision.label if decision.proposal_label == "no_gesture" and method in {"direct_c6", "c6_smoothing"} else decision.proposal_label,
+                    proposal_label=prediction_for_decision.label if decision.proposal_label == "no_gesture" and method in {"direct_c6", "c6_smoothing", "c6_temporal_stabilized"} else decision.proposal_label,
                     proposal_state=decision.proposal_state,
                     controller_mode=decision.controller_mode,
                     expected_label=expected_label,
@@ -792,17 +882,26 @@ def _config_for_method(base: GestureValidationConfig, method: str) -> GestureVal
         use_stability=base.use_stability,
         use_cooldown=base.use_cooldown,
         require_release=base.require_release,
+        require_global_release=base.require_global_release,
         contract=dict(base.contract),
     )
     if method == "c6_validation_confidence_only":
         config.use_stability = False
         config.use_cooldown = False
         config.require_release = False
+        config.require_global_release = False
     elif method == "c6_validation_confidence_stability":
         config.use_cooldown = False
         config.require_release = False
+        config.require_global_release = False
     elif method == "c6_validation_confidence_stability_cooldown":
         config.require_release = True
+        config.require_global_release = False
+    elif method == "c6_validation_tarc":
+        config.require_global_release = False
+    elif method == "c6_validation_tarc_release":
+        config.require_release = True
+        config.require_global_release = True
     return config
 
 
@@ -879,8 +978,53 @@ def _comparison_row(
         "rejected_actions": int(task.get("rejected_actions", metrics.get("rejected_action_count", 0)) or 0),
         "false_action_cost": _round(task.get("false_action_cost")),
         "missed_action_cost": _round(task.get("missed_action_cost")),
+        "action_precision": _round(task.get("weighted_action_precision")),
+        "action_recall": _round(task.get("weighted_action_recall")),
+        "task_completion": _round(task.get("task_completion_score")),
+        "confident_completion": _round(task.get("confident_completion_rate")),
         "task_success": _round(task.get("task_success_rate")),
     }
+
+
+def _statistical_comparison(
+    method_results: dict[str, dict[str, Any]],
+    *,
+    baseline_method: str = "direct_c6",
+    metrics: tuple[tuple[str, bool], ...] = (
+        ("false_action_cost", True),
+        ("false_actions", True),
+        ("task_completion_score", False),
+    ),
+) -> list[dict[str, Any]]:
+    """Paired comparison of each method against the direct baseline.
+
+    Units are the per-(sequence, task) rows produced by ``evaluate_task_set``;
+    because every method replays the identical sequences in the same order, the
+    rows align by index and the difference is paired. Each metric carries its own
+    direction: cost-like metrics use ``lower_is_better`` (a negative ``delta`` with
+    a CI fully below zero is the "pipeline reduces false AR actions" result), while
+    ``task_completion_score`` uses higher-is-better (a positive ``delta`` with a CI
+    fully above zero is the "pipeline completes tasks more confidently" result).
+    """
+
+    if baseline_method not in method_results:
+        return []
+    baseline_rows = method_results[baseline_method]["task_replay"].get("tasks", [])
+    if not baseline_rows:
+        return []
+    rows: list[dict[str, Any]] = []
+    for method, result in method_results.items():
+        if method == baseline_method:
+            continue
+        method_rows = result["task_replay"].get("tasks", [])
+        if len(method_rows) != len(baseline_rows):
+            continue
+        for metric, lower_is_better in metrics:
+            base_vec = [float(row.get(metric, 0.0)) for row in baseline_rows]
+            method_vec = [float(row.get(metric, 0.0)) for row in method_rows]
+            comparison: PairedComparison = paired_comparison(base_vec, method_vec, lower_is_better=lower_is_better)
+            rows.append({"method": method, "baseline": baseline_method, "metric": metric, **comparison.to_dict()})
+    return rows
 
 
 def _write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -898,6 +1042,10 @@ def _write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "rejected_actions",
         "false_action_cost",
         "missed_action_cost",
+        "action_precision",
+        "action_recall",
+        "task_completion",
+        "confident_completion",
         "task_success",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -906,7 +1054,12 @@ def _write_comparison_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _write_comparison_markdown(path: Path, rows: list[dict[str, Any]], limitations: list[str]) -> None:
+def _write_comparison_markdown(
+    path: Path,
+    rows: list[dict[str, Any]],
+    limitations: list[str],
+    statistical_comparison: list[dict[str, Any]] | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "method",
@@ -921,6 +1074,10 @@ def _write_comparison_markdown(path: Path, rows: list[dict[str, Any]], limitatio
         "rejected_actions",
         "false_action_cost",
         "missed_action_cost",
+        "action_precision",
+        "action_recall",
+        "task_completion",
+        "confident_completion",
         "task_success",
     ]
     lines = ["# Online Gesture Method Comparison", ""]
@@ -928,6 +1085,21 @@ def _write_comparison_markdown(path: Path, rows: list[dict[str, Any]], limitatio
     lines.append("| " + " | ".join("---" for _ in fieldnames) + " |")
     for row in rows:
         lines.append("| " + " | ".join(str(row.get(field, "")) for field in fieldnames) + " |")
+    if statistical_comparison:
+        stat_fields = ["method", "metric", "baseline_mean", "method_mean", "delta", "delta_ci_low", "delta_ci_high", "prob_improvement", "p_value", "n"]
+        lines.extend(
+            [
+                "",
+                "## Paired Comparison vs direct_c6 (lower is better)",
+                "",
+                "Per-(sequence, task) paired bootstrap. `delta` = method - baseline; a `delta_ci_high` below 0 means the reduction is significant at the chosen level. `p_value` is the exact McNemar test.",
+                "",
+                "| " + " | ".join(stat_fields) + " |",
+                "| " + " | ".join("---" for _ in stat_fields) + " |",
+            ]
+        )
+        for row in statistical_comparison:
+            lines.append("| " + " | ".join(_format_stat(row.get(field)) for field in stat_fields) + " |")
     if limitations:
         lines.extend(["", "## Limitations", ""])
         for item in _dedupe(limitations):
@@ -954,6 +1126,14 @@ def _round(value: Any) -> Any:
     if isinstance(value, float):
         return round(value, 6)
     return value
+
+
+def _format_stat(value: Any) -> str:
+    if isinstance(value, bool) or value is None:
+        return str(value)
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
 
 
 def _dedupe(values: list[str]) -> list[str]:
