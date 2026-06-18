@@ -67,25 +67,52 @@ the venv, and `*.onnx` / `*.mlpackage`. To run on the Mac you need, beyond `git 
 
 ## Mobile / rear phone-camera plan
 
-The recognizer is landmark-based (MediaPipe 21), so it is portable; the same feature
-pipeline (`preprocess_dual_view`, including the multi-view block) and the
-validation/TARC controller move to the device unchanged — only the capture front-end
-changes. Background: `docs/phone_ar_transfer.md`, `docs/capture_protocol.md`,
-`docs/phone_rear_gesture_resolution.md`.
+Keep two things separate — conflating them leads to the wrong conclusion "no retraining needed":
 
-Staged plan (do them in order; do not assume transfer without measuring):
+- **Running the existing desktop demo on the Mac = inference only, no retraining.** The shipped
+  IPN-trained models run as-is for the webcam demo and for ONNX/CoreML export.
+- **The rear phone-camera *recognizer* will almost certainly need retraining.** IPN Hand is a
+  frontal fixed webcam; the rear phone camera is a different capture geometry (hand at arm's
+  length, smaller and variable scale, a moving handheld background, different viewpoint and
+  lighting). Expect a real domain gap, so plan to retrain rather than ship the IPN model. Do NOT
+  try to train on a handful of locally recorded clips — too little data and too tedious. Use a
+  suitable public dataset and apply the same methodology as on the PC.
 
-1. **Capture.** Build an on-device MediaPipe-21 capture (Android/iOS) — or record
-   rear-camera clips — that produces the same landmark tensor format.
-2. **Measure the domain shift first.** Collect a small rear-camera validation set
-   and run the existing offline + online evaluations on it. Quantify the gap
-   honestly (IPN is a frontal fixed webcam; the rear camera is arm's-length, smaller
-   variable hand scale, moving handheld background). This measurement is itself a result.
-3. **Recalibrate.** Re-run C6 calibration selection (including ECE) and retune the
-   live controller thresholds with `scripts/diagnose_live_video.py` on rear-camera clips.
-4. **Export + port.** `export_onnx` (Android), `export_coreml` (iOS),
-   `export_mobile_bundle`. Port the lightweight validation/TARC/stabilizer logic.
-5. **Optional fine-tune** on a rear-camera set if the gap is large — on the CUDA box.
+Because the recognizer is landmark-based (MediaPipe 21), the whole methodology ports unchanged —
+only the training dataset and the capture front-end change:
+`MediaPipe-21 landmarks -> preprocess_dual_view (incl. multi-view JCD + slow/fast motion) -> TCN
+ensemble -> calibrated fusion (ECE in the objective) -> validation/TARC controller`.
+Background: `docs/phone_ar_transfer.md`, `docs/capture_protocol.md`, `docs/phone_rear_gesture_resolution.md`.
+
+Staged plan:
+
+1. **Capture.** On-device MediaPipe-21 capture (Android/iOS) or recorded rear-camera clips that
+   produce the same landmark tensor (the `research_pipeline/data` schema).
+2. **Measure the domain shift.** Run the IPN-trained models on a small rear-camera validation set
+   with the existing offline + online evaluators. This number decides everything and is itself a
+   result; a large gap is expected.
+3. **Pick a suitable dataset and retrain — on the CUDA box or a cloud GPU, NOT the M1** (the M1
+   training loop runs on CPU only, which is too slow). Dataset selection criteria: *dynamic* hand
+   gestures (not only static poses); a viewpoint/scale close to arm's-length rear capture; RGB
+   video so MediaPipe-21 landmarks are extractable; enough samples for the 7-class action
+   vocabulary; a permissive license. Candidates to evaluate before committing (verify viewpoint and
+   license each): Jester / 20BN (large, dynamic), EgoGesture (egocentric dynamic), HaGRID (large but
+   mostly static — useful for the pose-like classes), plus a small targeted rear-camera set for
+   validation and optional fine-tuning. Reuse the exact training methodology and configs
+   (`configs/train/ipn_c1t_tcn_*_mv.yaml`): TCN ensemble, multi-view features, class-balanced/focal
+   training, then C6 calibrated fusion with ECE in the selection objective. Map the new dataset's
+   labels to the 7-class action vocabulary (`research_pipeline/labels.py`).
+4. **Recalibrate the live controller** thresholds for the phone camera with
+   `scripts/diagnose_live_video.py` on rear-camera clips (the geometry constants in
+   `LiveLandmarkGestureController` are camera-specific), and re-run the C6 ECE calibration selection.
+5. **Export + port.** `export_onnx` (Android), `export_coreml` (iOS), `export_mobile_bundle`; port
+   the lightweight validation/TARC/stabilizer logic.
+
+The contribution and the whole methodology (validation pipeline, calibration, the metrics) carry
+over unchanged; only the recognizer's *training data* changes. Measuring the domain shift and
+retraining on a rear-camera-appropriate public dataset is the expected path, not an optional
+afterthought. The M1 is for capture-side development, threshold calibration, export, and on-device
+testing; the heavy training stays on the GPU machine.
 
 ## Bootstrapping a fresh Claude session on the Mac
 
