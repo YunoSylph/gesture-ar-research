@@ -114,6 +114,85 @@ retraining on a rear-camera-appropriate public dataset is the expected path, not
 afterthought. The M1 is for capture-side development, threshold calibration, export, and on-device
 testing; the heavy training stays on the GPU machine.
 
+## Mobile implementation progress (M1 session)
+
+The landmark pipeline, dataset ingest, local rear capture, and the iPhone export/contract layer
+are now built and unit-tested on the M1 (118 unit tests green; `.venv-gesture-ar` from
+`requirements/macos-arm64.txt`, including coremltools). What remains is the dataset-scale retraining
+and the Swift on-device implementation. Training itself runs fine on the M1 (the loop auto-selects
+CUDA -> MPS -> CPU; the compact ~650K-param TCN is ~10x faster on MPS than CPU, ~25 min for a full
+run); the reason to keep full Jester on the GPU box is the *data* side — the ~22 GB download plus
+extracting MediaPipe landmarks from ~148K clips. A reduced subset is feasible end-to-end on the M1.
+The contribution and methodology are unchanged; only the recognizer's training data and the
+capture/runtime front-end change. Status by stage:
+
+**Dataset ingest (stage 3 groundwork).** Label adapters map each source to the 7-class vocabulary
+and build canonical manifests, reusing the existing feature/TCN/multiview pipeline:
+
+- Jester (primary, dynamic): `labels.remap_jester_label` + `cli/build_jester_manifest`. Covers
+  5/7 classes (no_gesture, swipe_left/right, zoom_in/out). point_2f and click_2f are NOT in Jester.
+- HaGRID (static poses): `labels.remap_hagrid_label` + `cli/build_hagrid_manifest`. Supplies
+  point_2f (two_up/peace; HaGRID's one-finger "point" is deliberately unmapped). Static images are
+  turned into a replicated-pose clip by a new static path in `cli/extract_landmarks`
+  (`_is_static_image` / `_replicate_frame_to_clip`), because a single-image cv2.VideoCapture only
+  yields one frame.
+- Merge + balance: `cli/merge_datasets` (`data/merge`) caps per-class / per-source, reports
+  coverage, warns on missing classes, preserves domain tags.
+- Training config: `configs/train/jester_c1t_tcn_mv.yaml` (same TCN + multiview + balanced/focal
+  methodology; GPU only). click_2f has no public source and must come from the local set.
+
+**Local rear capture (stages 1 + 4).** `cli/ingest_local_videos` + `cli/extract_landmarks` process
+local iPhone rear clips (back-of-hand, 0.5x). A 50-clip set was captured and extracted; clip
+durations/fps are baked into the manifest so the window spans the whole clip. `cli/filter_by_coverage`
+(`data/coverage`) drops low-detection clips: click_2f extracts cleanly (~98% frame detection),
+while fast handheld swipes leave the frame / motion-blur and are better sourced from Jester. The
+IPN webcam models do not transfer to the rear back-of-hand domain, so retraining is required (as
+already planned) — the local set's essential role is click_2f plus orientation fine-tuning.
+
+**iPhone export + on-device contracts (stage 5).** Core ML export is now a real conversion (was a
+contract stub):
+
+- `cli/export_coreml` -> `models/coreml_export`: converts a TCN artifact to a Core ML .mlpackage
+  (mlprogram / FP16 / iOS15) and verifies torch<->Core ML numerical parity. The deployed mv models
+  take a **326-dim** feature window (not 74); the converter reads the real input_dim. The traced
+  graph is `jit.freeze`d before conversion, otherwise identical BatchNorm `num_batches_tracked`
+  constants get deduplicated and trip a coremltools lowering assertion for some trained weights
+  (notably MPS-trained models) — important for the GPU-model -> Mac -> Core ML export path.
+- `cli/export_preprocessing_contract` -> `models/preprocessing_contract`: emits the exact 326-dim
+  feature layout (pose 63 + motion 11 + JCD 210 + slow 21 + fast 21) and landmarks->features golden
+  vectors for Swift preprocessing parity.
+- `cli/export_validation_contract` -> `interaction/contract`: emits the acceptance-policy
+  (ContextAwarePolicy: confidence/stability/cooldown/release) spec and golden decision traces.
+- `cli/export_mobile_bundle` now uses the accurate 326-dim preprocessing contract.
+
+Generated mobile artifacts live under `artifacts/` (gitignored): `export/GestureClassifier.mlpackage`,
+`mobile/preprocessing/{feature_contract,golden_samples}.json`,
+`mobile/validation/{validation_contract,golden_traces}.json`, `mobile/gesture_mobile_bundle/`.
+
+**Rear model (trained on an RTX laptop).** `artifacts/models/rear_c1t_tcn_mv.pkl` — TCN + mv on
+the merged Jester (~4k/dynamic class) + HaGRID (point_2f) + local (click_2f) set. Held-out val
+accuracy ~0.82; point_2f, zoom_in/out, swipe_left/right and no_gesture all work (a real contrast
+with the IPN zero-shot collapse to no_gesture). **click_2f is under-supported — only 7 samples —
+and confuses with point_2f** (e.g. a real point_2f clip is read as click_2f). That is the main
+quality gap: record more click_2f / point_2f rear clips, re-merge and retrain to fix. Exported to
+`artifacts/export/GestureClassifier.mlpackage` (Core ML / FP16, torch<->Core ML parity verified);
+the iOS golden resources were regenerated from this model.
+
+**iOS app — now built and verified.** The Xcode app in `ios_demo/GestureAR/` is assembled and
+runs: MediaPipe Hands wired (via the `SwiftTasksVision` SPM, no CocoaPods), the rear-trained
+`.mlpackage` embedded, three demo tasks (Object Control / AR Scrolling / Sorting Objects), a live
+MediaPipe hand-skeleton overlay, and a minimal non-fullscreen UI with a task selector. The 3D layer
+uses **SceneKit** (a transparent `SCNView`), not a non-AR RealityKit `ARView`, because the latter
+renders an opaque background that hides the camera. Verified in the Simulator (selector + all three
+3D scenes render; camera shows through on device). The verified Swift core (preprocessing 326-dim /
+policy / AR-interaction-state) remains golden/unit-tested via `swift test`.
+
+**Full mobile architecture, datasets, training and app layout:** `docs/mobile_app_handoff.md`.
+
+**Next on the app:** ARKit world-anchored scene (objects floating in space, set back from the
+camera) via `ARWorldTrackingConfiguration`; real-hand occlusion over the 3D objects; and recognition
+quality (more `click_2f`/`point_2f` rear clips → re-merge → retrain).
+
 ## Bootstrapping a fresh Claude session on the Mac
 
 Point it at this file plus `docs/final_research_claim.md` and

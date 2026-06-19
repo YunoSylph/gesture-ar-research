@@ -9,7 +9,9 @@ from typing import Any
 from research_pipeline.cli.common import load_yaml, project_path
 from research_pipeline.interaction.fsm import ACTION_BY_LABEL, ContextPolicyConfig
 from research_pipeline.labels import FINAL_GESTURES, TARGET_LABELS
-from research_pipeline.models.artifacts import load_artifact
+from research_pipeline.models.artifacts import artifact_feature_flags, load_artifact
+from research_pipeline.models.preprocessing_contract import feature_layout_contract
+from research_pipeline.utils.errors import PipelineError
 
 
 def main() -> None:
@@ -49,38 +51,20 @@ def main() -> None:
             "mirror_rule": "swap swipe_left/swipe_right only when augmenting mirrored training samples",
         },
     }
-    preprocessing_payload = {
-        "coord_space": "image_normalized_xyz",
-        "target_length": target_length,
-        "model_input_shape": [1, target_length, input_dim],
-        "pose_features": {
-            "landmarks": 21,
-            "axes": 3,
-            "flattened_dim": 63,
-            "normalization": "per-frame wrist-centered coordinates divided by palm scale",
-        },
-        "motion_features": {
-            "dim": input_dim - 63,
-            "order": [
-                "centroid_x",
-                "centroid_y",
-                "wrist_x",
-                "wrist_y",
-                "centroid_dx",
-                "centroid_dy",
-                "wrist_dx",
-                "wrist_dy",
-                "hand_size",
-                "hand_size_delta",
-                "frame_confidence",
-            ],
-            "note": "Global image-plane motion is preserved so swipe direction remains observable.",
-        },
-        "runtime_contract": {
-            "desktop": "MediaPipe Python HandLandmarker -> same preprocessing -> ONNX/PyTorch classifier",
-            "ios": "ARKit rear-camera frame -> MediaPipe/Vision hand landmarks -> same preprocessing -> Core ML classifier",
-        },
+    include_mv, mv_coords = artifact_feature_flags(artifact)
+    preprocessing_payload = feature_layout_contract(
+        target_length=target_length, multiview_coords=mv_coords, include_multiview=include_mv
+    )
+    preprocessing_payload["model_input_shape"] = [1, target_length, input_dim]
+    preprocessing_payload["runtime_contract"] = {
+        "desktop": "MediaPipe Python HandLandmarker -> same preprocessing -> ONNX/PyTorch classifier",
+        "ios": "ARKit rear-camera frame -> MediaPipe/Vision hand landmarks -> same preprocessing -> Core ML classifier",
     }
+    if preprocessing_payload["feature_dim"] != input_dim:
+        raise PipelineError(
+            f"feature contract dim {preprocessing_payload['feature_dim']} != model input_dim {input_dim}; "
+            "the artifact's feature flags disagree with its tcn_config."
+        )
     c2_payload = {
         "activation_threshold": policy.activation_threshold,
         "stable_frames": policy.stable_frames,

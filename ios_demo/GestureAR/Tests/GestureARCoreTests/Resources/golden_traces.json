@@ -1,0 +1,148 @@
+{
+  "scenarios": [
+    {
+      "events": [
+        {
+          "action": "select_confirm",
+          "confidence": 0.85,
+          "gesture": "click_2f",
+          "state": "cooldown",
+          "timestamp_ms": 133
+        }
+      ],
+      "frames": [
+        [
+          0,
+          "no_gesture",
+          0.95
+        ],
+        [
+          100,
+          "click_2f",
+          0.8
+        ],
+        [
+          133,
+          "click_2f",
+          0.85
+        ]
+      ],
+      "name": "click_accept"
+    },
+    {
+      "events": [],
+      "frames": [
+        [
+          0,
+          "swipe_left",
+          0.9
+        ]
+      ],
+      "name": "single_frame_ignored"
+    },
+    {
+      "events": [],
+      "frames": [
+        [
+          0,
+          "click_2f",
+          0.5
+        ],
+        [
+          33,
+          "click_2f",
+          0.55
+        ],
+        [
+          66,
+          "click_2f",
+          0.5
+        ]
+      ],
+      "name": "below_threshold_rejected"
+    },
+    {
+      "events": [
+        {
+          "action": "zoom_in",
+          "confidence": 0.9,
+          "gesture": "zoom_in",
+          "state": "cooldown",
+          "timestamp_ms": 33
+        }
+      ],
+      "frames": [
+        [
+          0,
+          "zoom_in",
+          0.9
+        ],
+        [
+          33,
+          "zoom_in",
+          0.9
+        ],
+        [
+          66,
+          "zoom_in",
+          0.9
+        ],
+        [
+          99,
+          "zoom_in",
+          0.9
+        ],
+        [
+          132,
+          "zoom_in",
+          0.9
+        ]
+      ],
+      "name": "cooldown_debounces_repeat"
+    },
+    {
+      "events": [
+        {
+          "action": "navigate_next",
+          "confidence": 0.9,
+          "gesture": "swipe_right",
+          "state": "cooldown",
+          "timestamp_ms": 165
+        }
+      ],
+      "frames": [
+        [
+          0,
+          "swipe_right",
+          0.9
+        ],
+        [
+          33,
+          "no_gesture",
+          0.9
+        ],
+        [
+          66,
+          "no_gesture",
+          0.9
+        ],
+        [
+          99,
+          "no_gesture",
+          0.9
+        ],
+        [
+          132,
+          "swipe_right",
+          0.9
+        ],
+        [
+          165,
+          "swipe_right",
+          0.9
+        ]
+      ],
+      "name": "no_gesture_resets_candidate"
+    }
+  ]
+}

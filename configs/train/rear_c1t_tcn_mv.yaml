@@ -1,0 +1,42 @@
+# Rear-camera gesture model, trained on the MERGED manifest
+# (Jester + HaGRID + local rear set) with the SAME methodology as the IPN models.
+# This is the config to run on the GPU box; see docs/rear_training_runbook.md for
+# the full download -> manifest -> extract -> merge -> train flow.
+#
+# The training loop auto-selects CUDA -> MPS -> CPU, so on an RTX GPU it uses CUDA
+# automatically. Class coverage of the merged set: swipe_*/zoom_*/no_gesture from
+# Jester, point_2f from HaGRID (+ local), click_2f from the local rear set only.
+
+model_type: c1t_tcn
+backend: torch
+manifest: data/interim/manifests/rear_merged_landmarks.jsonl
+output_model: artifacts/models/rear_c1t_tcn_mv.pkl
+seed: 20260619
+target_length: 32
+epochs: 60
+batch_size: 64
+learning_rate: 0.0008
+weight_decay: 0.008
+validation_split: 0.15
+early_stopping_patience: 12
+early_stopping_min_delta: 0.0001
+
+tcn_channels: [96, 96, 128, 128]
+kernel_size: 5
+dropout: 0.20
+pooling: avgmax
+
+balanced_sampler: true
+focal_gamma: 1.2
+label_smoothing: 0.03
+augmentation:
+  noise_sigma: 0.010
+  scale_std: 0.015
+  feature_dropout: 0.035
+  temporal_shift: 2
+  time_mask_prob: 0.18
+  time_mask_max_width: 4
+
+# OO-dMVMT multi-view block (JCD + slow/fast motion). Image xy only (coords=2).
+feature_set: dual_view_multiview
+multiview_coords: 2

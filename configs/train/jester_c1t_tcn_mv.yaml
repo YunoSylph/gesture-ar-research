@@ -1,0 +1,71 @@
+# Rear-camera recognizer base, trained on 20BN-Jester with the SAME methodology
+# as the IPN models (TCN + OO-dMVMT multi-view features + class-balanced/focal
+# training). Jester replaces IPN only as the *training data*; the pipeline,
+# features and validation/TARC layer are unchanged.
+#
+# The training loop auto-selects CUDA, then Apple MPS (Metal), then CPU. The
+# compact TCN (~650K params) trains fast even on the M1 via MPS (~25 min for a
+# full ~120K-sample run; ~5 h on CPU). The practical reason to use the CUDA box /
+# cloud for Jester is the *data* side: the ~22 GB download plus extracting
+# MediaPipe landmarks from ~148K clips is what is slow on a laptop, not the
+# training itself. A reduced subset is feasible end-to-end on the M1.
+#
+# Coverage caveat: Jester supplies only 5 of the 7 action classes
+# (no_gesture, swipe_left, swipe_right, zoom_in, zoom_out). point_2f and click_2f
+# have NO Jester equivalent — supply them from another source (HaGRID static
+# poses / a local rear-camera set) and merge before training
+# (research_pipeline.cli.merge_datasets). A Jester-only model will never learn
+# point_2f/click_2f.
+#
+# Orientation caveat: Jester is frontal / palm-to-camera, the rear deployment
+# shows the back of the hand. The feature-space augmentation below (noise/scale/
+# dropout/time-mask) does NOT synthesize that palm->back-of-hand viewpoint flip,
+# so it does not close the orientation gap on its own — a local rear-camera
+# fine-tune/calibration set is required, not optional.
+#
+# Generate the landmark manifest + tensors first (on the GPU box):
+#   python -m research_pipeline.cli.build_jester_manifest \
+#       --annotations-dir <jester_annotations> --frames-root <jester_frames_root> \
+#       --output data/interim/manifests/jester.jsonl
+#   python -m research_pipeline.cli.extract_landmarks \
+#       --manifest data/interim/manifests/jester.jsonl --split train \
+#       --output-dir data/processed/jester \
+#       --output-manifest data/interim/manifests/jester_train_landmarks.jsonl
+
+model_type: c1t_tcn
+backend: torch
+manifest: data/interim/manifests/jester_train_landmarks.jsonl
+output_model: artifacts/models/jester_c1t_tcn_mv.pkl
+seed: 20260619
+target_length: 32
+# Jester is ~60x larger than the IPN train split, so fewer epochs are needed;
+# early stopping governs. Architecture/regularisation are kept identical to the
+# IPN augmented_mv methodology.
+epochs: 60
+batch_size: 64
+learning_rate: 0.0008
+weight_decay: 0.008
+validation_split: 0.15
+early_stopping_patience: 12
+early_stopping_min_delta: 0.0001
+
+tcn_channels: [96, 96, 128, 128]
+kernel_size: 5
+dropout: 0.20
+pooling: avgmax
+
+balanced_sampler: true
+focal_gamma: 1.2
+label_smoothing: 0.03
+augmentation:
+  noise_sigma: 0.010
+  scale_std: 0.015
+  feature_dropout: 0.035
+  temporal_shift: 2
+  time_mask_prob: 0.18
+  time_mask_max_width: 4
+
+# OO-dMVMT multi-view block (JCD + slow/fast motion) appended to the per-frame
+# features. Image xy only (coords=2) to avoid MediaPipe's noisy relative-z.
+feature_set: dual_view_multiview
+multiview_coords: 2

@@ -1,0 +1,46 @@
+# XcodeGen spec — generate the iOS app project with one command:
+#   brew install xcodegen
+#   cd ios_demo/GestureAR && xcodegen generate
+#   open GestureAR.xcodeproj
+#
+# Then: add the MediaPipe Hands package and the trained GestureClassifier.mlpackage
+# to the GestureAR target (see README), and run on a device.
+name: GestureAR
+options:
+  bundleIdPrefix: com.gesturear
+  deploymentTarget:
+    iOS: "15.0"
+packages:
+  GestureARCore:
+    path: .
+  # Community SPM wrapper that re-vends the official MediaPipe Vision pods (no
+  # CocoaPods). First build downloads the MediaPipe binary frameworks (large).
+  SwiftTasksVision:
+    url: https://github.com/paescebu/SwiftTasksVision.git
+    branch: main
+targets:
+  GestureAR:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - path: GestureClassifier.mlpackage   # Core ML model -> compiled to .mlmodelc in the bundle
+      - path: hand_landmarker.task          # MediaPipe model -> bundle resource
+    dependencies:
+      - package: GestureARCore
+        product: GestureARCore
+      - package: SwiftTasksVision
+        product: SwiftTasksVision
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gesturear.app
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        # For device builds, set your Apple Developer team here or pick it in
+        # Xcode > Signing & Capabilities (Simulator builds need no signing).
+        DEVELOPMENT_TEAM: ""
+        INFOPLIST_KEY_NSCameraUsageDescription: "In-air hand gesture control uses the rear camera."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SWIFT_VERSION: "5.9"

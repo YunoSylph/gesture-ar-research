@@ -116,3 +116,153 @@ def remap_ipn_label(public_label: str | int) -> str | None:
         return IPN_NAME_TO_TARGET[normalized]
     canonical = normalize_label_text(text)
     return canonical if canonical in TARGET_TO_INDEX else None
+
+
+# ---------------------------------------------------------------------------
+# Jester (20BN-Jester) -> 7-class action vocabulary
+# ---------------------------------------------------------------------------
+# Jester is a large, dynamic, easily downloadable webcam gesture dataset and the
+# practical primary source for the rear-camera recognizer's *dynamic* classes
+# (swipe/zoom) after EgoGesture was set aside for download infeasibility. Only a
+# subset of Jester's 27 classes maps to this project's vocabulary:
+#   - swipe_left/right and zoom_in/out have clear equivalents;
+#   - no_gesture is covered by Jester's idle/"other" classes;
+#   - point_2f and click_2f have NO Jester equivalent and must come from another
+#     source (HaGRID static poses or a local rear-camera set).
+# Jester is also frontal / palm-to-camera, whereas the rear deployment shows the
+# back of the hand. That orientation gap is closed with augmentation plus a local
+# fine-tune set, not by this label mapping.
+
+JESTER_NAME_TO_TARGET: dict[str, str] = {
+    "swiping left": "swipe_left",
+    "swiping right": "swipe_right",
+    "zooming in with two fingers": "zoom_in",
+    "zooming out with two fingers": "zoom_out",
+    "no gesture": "no_gesture",
+    "doing other things": "no_gesture",
+}
+
+# Distinct Jester gestures that share screen-space motion / zoom semantics with a
+# target class. Folded into that target only when explicitly requested, since
+# they are visually different actions (two-finger slide, full-hand zoom).
+JESTER_MOTION_EQUIVALENT_TO_TARGET: dict[str, str] = {
+    "sliding two fingers left": "swipe_left",
+    "sliding two fingers right": "swipe_right",
+    "zooming in with full hand": "zoom_in",
+    "zooming out with full hand": "zoom_out",
+}
+
+# Jester classes with no equivalent in the 7-class vocabulary. Returned as None
+# by default (excluded); training may instead fold them into no_gesture as hard
+# negatives to suppress false actions on non-command motion.
+JESTER_NON_TARGET: tuple[str, ...] = (
+    "swiping up",
+    "swiping down",
+    "pushing hand away",
+    "pulling hand in",
+    "sliding two fingers up",
+    "sliding two fingers down",
+    "pushing two fingers away",
+    "pulling two fingers in",
+    "rolling hand forward",
+    "rolling hand backward",
+    "turning hand clockwise",
+    "turning hand counterclockwise",
+    "thumb up",
+    "thumb down",
+    "shaking hand",
+    "stop sign",
+    "drumming fingers",
+)
+
+# Target classes Jester can supply directly, and those it cannot (honest coverage).
+JESTER_COVERED_TARGETS: frozenset[str] = frozenset(JESTER_NAME_TO_TARGET.values())
+JESTER_MISSING_TARGETS: tuple[str, ...] = tuple(
+    label for label in TARGET_LABELS if label not in JESTER_COVERED_TARGETS
+)
+
+
+def _normalize_jester_text(value: str) -> str:
+    return " ".join(str(value).strip().lower().split())
+
+
+def remap_jester_label(
+    label: str,
+    *,
+    include_motion_equivalents: bool = False,
+    fold_non_target_as_no_gesture: bool = False,
+) -> str | None:
+    """Map a Jester class name to the final 7-class action vocabulary.
+
+    Returns None when the Jester class has no project equivalent, unless
+    ``fold_non_target_as_no_gesture`` is set, in which case recognised
+    non-command Jester gestures (including unused motion-equivalents) are treated
+    as ``no_gesture`` hard negatives. ``include_motion_equivalents`` instead maps
+    the motion-equivalent classes onto their swipe/zoom target.
+    """
+
+    normalized = _normalize_jester_text(label)
+    if normalized == "":
+        return None
+    if normalized in JESTER_NAME_TO_TARGET:
+        return JESTER_NAME_TO_TARGET[normalized]
+    if include_motion_equivalents and normalized in JESTER_MOTION_EQUIVALENT_TO_TARGET:
+        return JESTER_MOTION_EQUIVALENT_TO_TARGET[normalized]
+    if normalized in JESTER_NON_TARGET or normalized in JESTER_MOTION_EQUIVALENT_TO_TARGET:
+        return "no_gesture" if fold_non_target_as_no_gesture else None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# HaGRID / HaGRIDv2 -> 7-class action vocabulary
+# ---------------------------------------------------------------------------
+# HaGRID is a large, easily downloadable *static-image* hand-pose dataset. It is
+# used only to supply the two-finger pose class point_2f (Jester has no
+# point/click), via the two-finger poses two_up / peace (and their inverted
+# variants). HaGRID's own "point" class is a SINGLE-finger point, so it is NOT
+# mapped to point_2f. Being static, HaGRID cannot supply the dynamic classes
+# (swipe_*/zoom_*) or click_2f; those come from Jester and a local rear-camera
+# set. Downstream, HaGRID images are turned into static-pose clips (one detected
+# frame replicated over the window) before feature extraction.
+
+HAGRID_NAME_TO_TARGET: dict[str, str] = {
+    "two_up": "point_2f",
+    "two_up_inverted": "point_2f",
+    "peace": "point_2f",
+    "peace_inverted": "point_2f",
+    "no_gesture": "no_gesture",
+}
+
+# Full HaGRIDv2 class vocabulary, so non-target folding only applies to genuine
+# HaGRID classes rather than arbitrary strings.
+HAGRID_KNOWN_CLASSES: frozenset[str] = frozenset(
+    {
+        "call", "dislike", "fist", "four", "like", "mute", "ok", "palm", "peace",
+        "peace_inverted", "rock", "stop", "stop_inverted", "three", "three2",
+        "three3", "three_gun", "two_up", "two_up_inverted", "one", "grabbing",
+        "grip", "hand_heart", "hand_heart2", "holy", "little_finger",
+        "middle_finger", "point", "take_picture", "thumb_index", "thumb_index2",
+        "timeout", "xsign", "no_gesture",
+    }
+)
+
+HAGRID_COVERED_TARGETS: frozenset[str] = frozenset(HAGRID_NAME_TO_TARGET.values())
+HAGRID_MISSING_TARGETS: tuple[str, ...] = tuple(
+    label for label in TARGET_LABELS if label not in HAGRID_COVERED_TARGETS
+)
+
+
+def remap_hagrid_label(label: str, *, fold_non_target_as_no_gesture: bool = False) -> str | None:
+    """Map a HaGRID gesture class name to the final 7-class action vocabulary.
+
+    Returns None for HaGRID classes with no project equivalent, unless
+    ``fold_non_target_as_no_gesture`` is set, in which case any recognised HaGRID
+    class is treated as a ``no_gesture`` static hard negative.
+    """
+
+    normalized = normalize_label_text(label)
+    if normalized in HAGRID_NAME_TO_TARGET:
+        return HAGRID_NAME_TO_TARGET[normalized]
+    if fold_non_target_as_no_gesture and normalized in HAGRID_KNOWN_CLASSES:
+        return "no_gesture"
+    return None

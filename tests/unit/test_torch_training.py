@@ -50,6 +50,7 @@ class TorchTrainingTests(unittest.TestCase):
                     batch_size=8,
                     validation_split=0.33,
                     early_stopping_patience=1,
+                    device="cpu",
                 )
             except DependencyMissingError:
                 self.skipTest("PyTorch is not installed")

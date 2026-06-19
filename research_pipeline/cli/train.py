@@ -66,6 +66,7 @@ def main() -> None:
             augmentation=config.get("augmentation", {}),
             include_multiview=include_multiview,
             multiview_coords=multiview_coords,
+            device=config.get("device"),
         )
     elif model_type in {"temporal_prototype", "c1t_auto", "c1t_tcn"}:
         artifact = train_temporal_prototype(manifest, output_model, seed=seed, target_length=target_length)

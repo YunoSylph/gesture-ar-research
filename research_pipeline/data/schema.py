@@ -34,7 +34,7 @@ REQUIRED_MANIFEST_FIELDS: tuple[str, ...] = (
 )
 
 HAND_VALUES = {"left", "right", "unknown"}
-SOURCE_VALUES = {"ipn_hand", "local_phone", "synthetic"}
+SOURCE_VALUES = {"ipn_hand", "local_phone", "synthetic", "jester", "hagrid"}
 
 
 @dataclass(slots=True)

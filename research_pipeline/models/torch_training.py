@@ -225,6 +225,7 @@ def train_tcn(
     augmentation: dict | None = None,
     include_multiview: bool = False,
     multiview_coords: int = 2,
+    device: str | None = None,
 ) -> dict:
     torch, nn = require_torch()
     set_global_seed(seed)
@@ -264,7 +265,17 @@ def train_tcn(
         pooling=str(pooling),
     )
     model = build_tcn(config)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Prefer CUDA, then Apple Metal (MPS) on M-series Macs, else CPU. AMP below
+    # stays cuda-only, so MPS trains in FP32 (still ~10x faster than CPU here).
+    if device:
+        device = torch.device(device)
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    print(f"training on device: {device}")
     model.to(device)
 
     class_counts = np.bincount(train_y_np, minlength=len(TARGET_LABELS)).astype(np.float32)

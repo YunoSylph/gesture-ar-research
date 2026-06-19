@@ -13,6 +13,59 @@ from research_pipeline.data.tensors import save_landmark_npz
 from research_pipeline.utils.errors import DependencyMissingError
 
 
+STATIC_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+def _is_static_image(raw_video_path: str) -> bool:
+    """A single still image source (HaGRID), not a video or %0Nd frame sequence."""
+
+    if not raw_video_path or "%" in raw_video_path:
+        return False
+    return Path(raw_video_path).suffix.lower() in STATIC_IMAGE_SUFFIXES
+
+
+def _replicate_frame_to_clip(
+    frame_landmarks: np.ndarray, detected: bool, confidence: float, target_length: int
+) -> LandmarkTensor:
+    """Replicate one detected pose across the window to form a static-pose clip."""
+
+    frame = np.asarray(frame_landmarks, dtype=np.float32)
+    landmarks = np.repeat(frame[None, :, :], target_length, axis=0)
+    flag = bool(detected)
+    score = float(confidence) if flag else 0.0
+    mask = np.full((target_length,), flag, dtype=bool)
+    frame_confidence = np.full((target_length,), score, dtype=np.float32)
+    return LandmarkTensor(
+        landmarks=landmarks,
+        sequence_mask=mask,
+        frame_confidence=frame_confidence,
+        handedness_score=frame_confidence.copy(),
+        coord_space="image_normalized_xyz",
+    )
+
+
+def _extract_static_image_clip(image_path: str, target_length: int, detector) -> LandmarkTensor:
+    import cv2
+    import mediapipe as mp
+
+    frame = cv2.imread(image_path)
+    if frame is None:
+        raise FileNotFoundError(f"Cannot open image: {image_path}")
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    result = detector.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
+    if not result.hand_landmarks:
+        return _replicate_frame_to_clip(np.zeros((21, 3), dtype=np.float32), False, 0.0, target_length)
+    hand_index = 0
+    confidence = 1.0
+    if result.handedness:
+        scores = [category[0].score for category in result.handedness if category]
+        hand_index = int(np.argmax(scores))
+        confidence = float(scores[hand_index])
+    points = result.hand_landmarks[hand_index]
+    frame_landmarks = np.array([[point.x, point.y, point.z] for point in points], dtype=np.float32)
+    return _replicate_frame_to_clip(frame_landmarks, True, confidence, target_length)
+
+
 def _frame_range_from_record(record, target_length: int) -> np.ndarray:
     fps = record.fps or 30.0
     start_frame = max(0, int(round(record.clip_start_ms * fps / 1000.0)))
@@ -136,6 +189,10 @@ def main() -> None:
                 seed=args.seed,
                 sample_id=record.sample_id,
             )
+        elif _is_static_image(record.raw_video_path):
+            if hands is None:
+                hands = _new_hands_detector(args.model_asset)
+            tensor = _extract_static_image_clip(record.raw_video_path, args.target_length, hands)
         else:
             if hands is None:
                 hands = _new_hands_detector(args.model_asset)
